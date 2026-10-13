@@ -4,15 +4,32 @@
 > questions about publicly shareable financial documents and get answers tied to
 > their source passages, with document and page citations.
 
-**Status: Phase 2 — ingestion + hybrid retrieval.** Real PDFs can be uploaded,
-parsed, chunked, embedded locally, and searched with hybrid retrieval returning
-**source passages with verifiable page-level citations**. Generation is still a
-**deterministic mock** (clearly labelled); the retrieval UI shows evidence, not
-AI-authored answers. No GPU and no paid services are required.
+**Status: experimental.** A full RAG system (ingestion → hybrid retrieval +
+reranking → grounded, citation-verified generation) plus a reproducible **LoRA
+fine-tuning + evaluation** pipeline for a small financial-fact **extraction**
+adapter over `Qwen/Qwen3-0.6B`. Runs locally with no paid services.
 
-This is a public, open-source portfolio project. It is **not** financial advice,
-and it handles only publicly shareable, non-sensitive documents. See
+This is a public, open-source **portfolio** project. See
 [`docs/NORTH_STAR.md`](docs/NORTH_STAR.md).
+
+> ## ⚠️ Experimental model — read before using
+>
+> - The adapter is **fine-tuned (LoRA), NOT trained from scratch**, over a
+>   pinned open-weight base (`Qwen/Qwen3-0.6B`, Apache-2.0). We publish the
+>   **adapter only**, never base weights.
+> - Evaluation evidence is **templated prose containing real SEC XBRL figures**
+>   — **not** verbatim filing excerpts.
+> - The frozen 239-example SEC benchmark was first used to find adapter-**v1**
+>   weaknesses, which were then **specifically targeted in v2 training**. So for
+>   v2 that benchmark is a **targeted regression check** — its near-perfect
+>   (≈100%) scores are **NOT independent generalization results**.
+> - **Authentic filing-text generalization remains untested** (real 10-K/10-Q
+>   prose, tables, footnotes).
+> - This model is **experimental** and **not suitable for financial advice or
+>   unsupervised high-stakes decisions**. Always verify against primary sources.
+>
+> Full methodology and measured numbers: [`docs/EVALUATION.md`](docs/EVALUATION.md)
+> and the model card [`training/MODEL_CARD.md`](training/MODEL_CARD.md).
 
 ## What works today
 
@@ -170,8 +187,27 @@ No secrets are committed. Each service documents its environment variables in a
 - [Decisions](docs/DECISIONS.md) — architecture decision records.
 - [Security](docs/SECURITY.md) — trust boundaries, uploads, prompt injection.
 - [Model Strategy](docs/MODEL_STRATEGY.md) — base models, LoRA/QLoRA, evaluation.
-- [Evaluation](docs/EVALUATION.md) — measured retrieval Recall@5 / MRR@10.
+- [Evaluation](docs/EVALUATION.md) — measured retrieval + base/v1/v2 extraction.
+- [Model Card](training/MODEL_CARD.md) — the LoRA adapter (experimental).
+- [Attributions](docs/ATTRIBUTIONS.md) — third-party licenses & audit.
+- [Release Manifest](docs/RELEASE_MANIFEST.md) · [Publication dry-run](docs/RELEASE_PUBLICATION.md)
+- [Contributing](CONTRIBUTING.md).
+
+## Demo
+
+No hosted demo (nothing is deployed). To try it locally:
+
+- **Full RAG app:** `docker compose -f infra/docker-compose.yml up --build`, then
+  open <http://localhost:5173> — upload a PDF, retrieve evidence, and (mock or
+  real inference) get a citation-verified grounded answer. See
+  [`infra/README.md`](infra/README.md).
+- **The extraction adapter:** load `Qwen/Qwen3-0.6B` + the LoRA adapter and run a
+  structured extraction — see the loading example in
+  [`training/MODEL_CARD.md`](training/MODEL_CARD.md) and commands in
+  [`training/README.md`](training/README.md).
 
 ## License
 
-Apache-2.0.
+Apache-2.0 (see [`LICENSE`](LICENSE) and [`docs/ATTRIBUTIONS.md`](docs/ATTRIBUTIONS.md)).
+The published Hugging Face artifact is an **adapter only**; the Qwen3-0.6B base
+(Apache-2.0) is downloaded from its original source, not redistributed here.

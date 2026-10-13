@@ -15,6 +15,7 @@ of Git by default (data/ is .gitignored) but are redistributable.
 from __future__ import annotations
 
 import json
+import os
 import re
 import urllib.request
 from dataclasses import asdict, dataclass
@@ -23,7 +24,12 @@ from pathlib import Path
 
 from veridoc_ft.prompt import marker_for
 
-SEC_UA = "Veridoc-AI research dmitttrov@gmail.com"
+# SEC's fair-access policy requires a descriptive User-Agent with a contact.
+# Configure it via the SEC_USER_AGENT env var (do NOT hardcode a personal
+# email in a public repo). The default is a non-identifying placeholder.
+SEC_UA = os.environ.get(
+    "SEC_USER_AGENT", "veridoc-ai-eval (set SEC_USER_AGENT to your contact)"
+)
 
 COMPANIES = [
     ("Apple Inc.", "0000320193"),
