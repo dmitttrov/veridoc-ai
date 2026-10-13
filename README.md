@@ -4,10 +4,11 @@
 > questions about publicly shareable financial documents and get answers tied to
 > their source passages, with document and page citations.
 
-**Status: Phase 1 — vertical slice.** The system runs end-to-end
-(React → NestJS → FastAPI) with a **deterministic mock** inference provider.
-No GPU, no model weights, and no paid services are required. Mock mode is
-clearly labelled in the UI and in every response.
+**Status: Phase 2 — ingestion + hybrid retrieval.** Real PDFs can be uploaded,
+parsed, chunked, embedded locally, and searched with hybrid retrieval returning
+**source passages with verifiable page-level citations**. Generation is still a
+**deterministic mock** (clearly labelled); the retrieval UI shows evidence, not
+AI-authored answers. No GPU and no paid services are required.
 
 This is a public, open-source portfolio project. It is **not** financial advice,
 and it handles only publicly shareable, non-sensitive documents. See
@@ -15,12 +16,22 @@ and it handles only publicly shareable, non-sensitive documents. See
 
 ## What works today
 
-- A React UI with a document list, a streaming chat, and inline citations.
-- A NestJS gateway that validates requests and streams answers over SSE.
-- A FastAPI AI service with a pluggable `InferenceProvider` and a deterministic
-  mock backend that produces grounded-style answers with fixture citations.
+- **Document retrieval (Phase 2):** upload a PDF → it is validated, normalized,
+  chunked, embedded, and stored in PostgreSQL + pgvector; ask a question and get
+  hybrid-retrieved source passages (FTS + vector + RRF) with exact text, page,
+  character span, scores, and a traceable citation. Re-ingesting the same PDF is
+  idempotent.
+- **Mock chat (Phase 1):** a React streaming chat over SSE with a deterministic
+  mock provider and inline citations, still available via the view switcher.
+- A NestJS gateway (public edge) that validates requests, enforces upload
+  limits, and streams/forwards to the internal FastAPI AI service.
+- Pluggable embeddings: deterministic (default, reproducible) and a real local
+  `sentence-transformers` model.
 - Shared, runtime-validated contracts (`@veridoc/contracts`).
-- Health endpoints, automated tests, lint/type checks, and CI.
+- A reproducible retrieval evaluation (`python -m app.eval.run`) — measured
+  results in [`docs/EVALUATION.md`](docs/EVALUATION.md).
+- Health endpoints, automated tests, lint/type checks, and CI (incl. DB-backed
+  integration tests against pgvector).
 
 ## Repository layout
 
@@ -52,8 +63,19 @@ docker compose -f infra/docker-compose.yml up --build
 # open http://localhost:5173
 ```
 
-The AI service is intentionally **not** published to the host (see
+This starts PostgreSQL + pgvector (`db`), the AI service (`ai`, which runs
+database migrations on startup), the gateway (`api`), and the web app (`web`).
+The AI service and database are intentionally **not** published to the host (see
 [`docs/SECURITY.md`](docs/SECURITY.md)).
+
+To ingest a PDF and query it from the command line instead:
+
+```bash
+curl -F "file=@yourdoc.pdf;type=application/pdf" http://localhost:3000/api/documents/upload
+curl -X POST http://localhost:3000/api/retrieve \
+  -H "Content-Type: application/json" \
+  -d '{"query":"What was total revenue?","topK":5}'
+```
 
 ## Quick start — run services directly
 
@@ -136,6 +158,7 @@ No secrets are committed. Each service documents its environment variables in a
 - [Decisions](docs/DECISIONS.md) — architecture decision records.
 - [Security](docs/SECURITY.md) — trust boundaries, uploads, prompt injection.
 - [Model Strategy](docs/MODEL_STRATEGY.md) — base models, LoRA/QLoRA, evaluation.
+- [Evaluation](docs/EVALUATION.md) — measured retrieval Recall@5 / MRR@10.
 
 ## License
 

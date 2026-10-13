@@ -89,3 +89,64 @@ class HealthStatus(CamelModel):
     service: str
     version: str
     mock: bool | None = None
+
+
+# --- Phase 2: ingestion ----------------------------------------------------
+
+IngestionState = Literal["pending", "running", "succeeded", "failed"]
+
+
+class StoredDocument(CamelModel):
+    id: str
+    title: str
+    filename: str
+    page_count: int = Field(ge=0)
+    chunk_count: int = Field(ge=0)
+    size_bytes: int = Field(ge=0)
+
+
+class DocumentIngestionResult(CamelModel):
+    document_id: str
+    filename: str
+    content_hash: str
+    mime_type: str
+    size_bytes: int = Field(ge=0)
+    page_count: int = Field(ge=0)
+    chunk_count: int = Field(ge=0)
+    state: IngestionState
+    already_ingested: bool
+    error: str | None = None
+
+
+# --- Phase 2: retrieval ----------------------------------------------------
+
+
+class RetrievalRequest(CamelModel):
+    query: Annotated[str, Field(min_length=1, max_length=2000)]
+    document_ids: Annotated[list[str], Field(default_factory=list, max_length=50)]
+    top_k: Annotated[int, Field(default=5, gt=0, le=50)]
+
+
+class RetrievalScores(CamelModel):
+    lexical: float
+    semantic: float
+    fused: float
+
+
+class RetrievedPassage(CamelModel):
+    chunk_id: str
+    document_id: str
+    document_title: str
+    page: int = Field(gt=0)
+    text: str
+    char_start: int = Field(ge=0)
+    char_end: int = Field(ge=0)
+    scores: RetrievalScores
+    citation: str
+
+
+class RetrievalResponse(CamelModel):
+    query: str
+    passages: list[RetrievedPassage]
+    embedding_model: str
+    embedding_dim: int = Field(gt=0)

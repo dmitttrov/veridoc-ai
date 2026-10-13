@@ -14,13 +14,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.config import get_settings
+from app.db.pool import create_pool
+from app.embeddings import build_embedding_provider
 from app.providers import build_provider
-from app.routers import chat, health
+from app.routers import chat, documents, health, retrieve
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
+
+logger = logging.getLogger("veridoc.ai")
 
 
 @asynccontextmanager
@@ -28,13 +32,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     app.state.settings = settings
     app.state.provider = build_provider(settings)
-    logging.getLogger("veridoc.ai").info(
-        "AI service starting (provider=%s, mock=%s, model=%s)",
+    app.state.embedder = build_embedding_provider(settings)
+
+    # The DB is required for ingestion/retrieval but NOT for the Phase 1 chat
+    # mock path. Degrade gracefully if it is unavailable so the mock keeps
+    # working; ingestion/retrieval endpoints then return 503.
+    app.state.pool = None
+    try:
+        app.state.pool = await create_pool(settings)
+        logger.info("database pool ready")
+    except Exception as exc:  # noqa: BLE001 - startup must not hard-fail
+        logger.warning("database unavailable; ingestion/retrieval disabled (%s)", exc)
+
+    logger.info(
+        "AI service starting (provider=%s, mock=%s, embedder=%s, dim=%d)",
         settings.provider,
         settings.is_mock,
-        settings.model_name,
+        app.state.embedder.model_id,
+        app.state.embedder.dim,
     )
-    yield
+    try:
+        yield
+    finally:
+        if app.state.pool is not None:
+            await app.state.pool.close()
 
 
 def create_app() -> FastAPI:
@@ -42,7 +63,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Veridoc AI Service",
         version=__version__,
-        description="Internal inference service. Deterministic mock provider in Phase 1.",
+        description="Internal inference + retrieval service. Mock generation in Phase 1-2.",
         lifespan=lifespan,
     )
 
@@ -58,6 +79,8 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router, tags=["health"])
     app.include_router(chat.router, tags=["chat"])
+    app.include_router(documents.router, tags=["documents"])
+    app.include_router(retrieve.router, tags=["retrieval"])
     return app
 
 

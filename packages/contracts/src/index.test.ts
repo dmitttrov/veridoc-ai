@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ChatRequestSchema,
   ChatStreamEventSchema,
+  RetrievalRequestSchema,
   encodeSseEvent,
   type ChatStreamEvent,
 } from './index';
@@ -32,6 +33,22 @@ describe('ChatStreamEventSchema', () => {
 
   it('rejects an unknown event type', () => {
     const result = ChatStreamEventSchema.safeParse({ type: 'nope' });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('RetrievalRequestSchema', () => {
+  it('defaults topK and documentIds', () => {
+    const parsed = RetrievalRequestSchema.parse({ query: 'revenue' });
+    expect(parsed.topK).toBe(5);
+    expect(parsed.documentIds).toEqual([]);
+  });
+
+  it('rejects a non-uuid document id', () => {
+    const result = RetrievalRequestSchema.safeParse({
+      query: 'revenue',
+      documentIds: ['not-a-uuid'],
+    });
     expect(result.success).toBe(false);
   });
 });

@@ -26,44 +26,45 @@ mock, typed contracts, tests, and CI.
 
 ---
 
-## Days 2–3 — Document ingestion foundation
+## Days 2–5 — Phase 2: ingestion + hybrid retrieval ✅ (done)
 
-**Goal:** Replace fixtures with real (publicly shareable, synthetic or public)
-documents, parsed with page-level provenance, stored in PostgreSQL + pgvector.
+**Goal:** Ingest real PDFs with page-level provenance into PostgreSQL+pgvector
+and retrieve real evidence via hybrid search.
 
 **Acceptance criteria**
-- [ ] `docker compose` adds a Postgres+pgvector service with a migration that
-      creates `documents`, `pages`, and `chunks` tables.
-- [ ] An ingestion CLI in `services/ai` parses a PDF into pages → chunks with
-      `(document_id, page, char_span)` provenance; fixtures remain synthetic.
-- [ ] Upload endpoint on the gateway enforces type/size limits (see SECURITY).
-- [ ] Tests: parser produces stable chunk spans; ingestion is idempotent.
+- [x] Compose adds a Postgres+pgvector service; versioned migrations create
+      `documents`, `document_pages`, `document_chunks`, `ingestion_runs`.
+- [x] Secure PDF ingestion (pypdf): signature/size/page-count/encryption/
+      malformed checks, processing timeout, deterministic normalize + chunk with
+      `(document_id, page, char_span)` provenance; CLI + gateway upload.
+- [x] Upload endpoint on the gateway enforces type/size limits (see SECURITY).
+- [x] Pluggable embeddings (deterministic + local sentence-transformers),
+      fixed 384-dim, model identity recorded, dimension mixing rejected.
+- [x] Hybrid retrieval: Postgres FTS + pgvector cosine + RRF; configurable top-k;
+      document filtering; traceable page-level citations.
+- [x] Idempotent ingestion; transactional store with rollback.
+- [x] Tests for uploads, encrypted/malformed/empty PDFs, stable chunk ids/offsets,
+      idempotency, rollback, dimension mismatch, keyword/vector/hybrid retrieval,
+      filtering, citation correctness, gateway error propagation.
+- [x] Reproducible evaluation (`python -m app.eval.run`) over a synthetic corpus
+      reporting **measured** Recall@5 and MRR@10 — see `docs/EVALUATION.md`.
+
+Deferred to Phase 3: cross-encoder reranking.
 
 ---
 
-## Days 4–5 — Retrieval (lexical + vector)
+## Phase 3 (planned) — Reranking + source-grounded generation
 
-**Goal:** Retrieve candidate passages for a question.
-
-**Acceptance criteria**
-- [ ] Embedding step (local/open model) populates `chunks.embedding` (pgvector).
-- [ ] Vector similarity search and Postgres full-text search both implemented.
-- [ ] `/v1/chat/stream` uses retrieval to attach **real** citations (still mock
-      generation) limited to selected documents.
-- [ ] Tests: known query retrieves the known passage above a ranking threshold.
-
----
-
-## Days 6–7 — Hybrid retrieval + reranking
-
-**Goal:** Measurably better retrieval than either single strategy.
+**Goal:** Add a reranker and the first real generation grounded in retrieved
+passages.
 
 **Acceptance criteria**
-- [ ] Hybrid fusion (e.g. reciprocal rank fusion) of lexical + vector results.
-- [ ] A cross-encoder reranker reorders the fused top-k.
-- [ ] A small, committed evaluation set (synthetic Q→passage pairs) with a
-      retrieval metric (e.g. recall@k, MRR); hybrid ≥ each baseline.
-- [ ] No fabricated numbers — metrics are computed by a committed script.
+- [ ] Cross-encoder reranker reorders the fused top-k; evaluation shows the
+      change vs. the Phase 2 hybrid baseline (honestly reported).
+- [ ] `OpenAICompatibleProvider` (local server / vLLM) behind the existing
+      provider seam; mock stays the default/CI backend.
+- [ ] Grounded-or-abstain prompting with prompt-injection mitigations applied to
+      retrieved text (see SECURITY); citations verified against stored spans.
 
 ---
 

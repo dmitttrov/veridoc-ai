@@ -35,18 +35,32 @@ boundaries and the threats we design against. Items are labelled **[MVP]**
   environment variables with documented `.env.example` files, and real `.env`
   files are git-ignored. **[MVP]**
 
-## 3. Upload security *(Planned — Days 2–3)*
+## 3. Upload security **(implemented — Phase 2)**
 
-When document upload lands, the gateway will enforce, before any processing:
+Enforced today across the gateway and the AI service (defense in depth):
 
-- **Type allow-list** (e.g. PDF) by content sniffing, not just extension.
-- **Size limits** and a maximum page count; reject oversized payloads early.
-- **Filename sanitization**; store under generated IDs, never user-supplied
-  paths (defends against path traversal).
-- **No execution / no macro evaluation**; parse in a constrained library.
-- Parsing in an isolated worker with CPU/memory/time limits to bound
-  decompression-bomb and malformed-file risks.
-- Clear user consent that uploads are **publicly shareable** and non-sensitive.
+- **Type allow-list**: only `application/pdf`, checked at the gateway and
+  re-checked in the AI service, plus a **PDF signature** (`%PDF-`) check on the
+  bytes themselves. **[MVP]**
+- **Size limit** (`AI_MAX_UPLOAD_BYTES`, default 25 MiB) enforced by the gateway
+  (multer limit) and again in the AI service by bounded chunked reads; **page
+  count limit** (`AI_MAX_PAGES`, default 300). Oversized/too-many-pages uploads
+  are rejected early with 413. **[MVP]**
+- **Encrypted PDFs are rejected** (no decryption attempted); **malformed PDFs**
+  are rejected with a typed error. **[MVP]**
+- **Processing timeout** (`AI_PDF_PARSE_TIMEOUT_S`) bounds CPU time for parsing/
+  extraction (runs in a worker thread under `asyncio.wait_for`). **[MVP]**
+- **Generated IDs only**: documents/pages/chunks use deterministic UUIDs derived
+  from the content hash; the original filename is stored as metadata but never
+  used as a filesystem path (no path traversal; uploads are not written to
+  disk). **[MVP]**
+- **No execution of document content**: extracted text is treated purely as data
+  — parsed, normalized, chunked, embedded, stored. It is never eval'd,
+  interpreted, or used to drive control flow. **[MVP]**
+- **Content is never logged**: logs record only metadata (filename, hash prefix,
+  counts, error codes), never extracted text. **[MVP]**
+- Still assumes uploads are **publicly shareable** and non-sensitive; explicit
+  per-user consent UX and antivirus scanning remain future hardening.
 
 ## 4. Prompt injection & content risks *(Planned, with MVP groundwork)*
 

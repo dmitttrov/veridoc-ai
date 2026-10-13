@@ -1,5 +1,40 @@
 # Veridoc AI — Architecture
 
+This document describes the system as it exists after **Phase 2 (ingestion +
+retrieval)** and the seams designed in for later phases. Work built now and
+future work are labelled throughout.
+
+## Phase 2 additions (ingestion + hybrid retrieval)
+
+Phase 2 makes Veridoc ingest real PDFs and retrieve real evidence with
+page-level provenance. **Generation is still not implemented** — the retrieval
+UI shows source passages (evidence), explicitly *not* AI-authored answers.
+
+- **PostgreSQL + pgvector** store documents, pages, chunks, and ingestion runs.
+- **Secure PDF ingestion** (pypdf): validate → extract → deterministic
+  normalize → deterministic chunk → embed → store, transactionally and
+  idempotently (deterministic UUIDv5 ids keyed on the SHA-256 content hash).
+- **Pluggable embeddings**: a deterministic feature-hashing provider (default,
+  no heavy deps, reproducible) and a real local `sentence-transformers`
+  provider (`all-MiniLM-L6-v2`, 384-dim, Apache-2.0).
+- **Hybrid retrieval**: PostgreSQL full-text search + pgvector cosine
+  similarity, fused with Reciprocal Rank Fusion; results carry exact text,
+  page, character span, per-leg scores, and a traceable citation.
+- **Gateway upload** endpoint (multipart) forwarding to the internal AI service;
+  **retrieval** endpoint returning typed passages.
+
+New data flow (ingestion): browser → `POST /api/documents/upload` (gateway,
+size/type checks) → `POST /v1/documents/ingest` (AI service) → validate/extract/
+normalize/chunk/embed → single transaction writing `documents`, `document_pages`,
+`document_chunks`; the attempt is recorded in `ingestion_runs`.
+
+New data flow (retrieval): browser → `POST /api/retrieve` → `POST /v1/retrieve`
+→ lexical + vector legs over `document_chunks` (filtered to the active embedding
+model) → RRF fusion → passages whose `text` is exactly
+`document_pages.normalized_text[char_start:char_end]`.
+
+---
+
 This document describes the system as it exists after **Phase 1 (vertical
 slice)** and the seams designed in for later phases. MVP (built now) and future
 work are labelled throughout.
@@ -108,7 +143,11 @@ packages/contracts — shared TypeScript types + zod schemas (single source of t
 | Streaming | Server-Sent Events | One-way token streaming, trivial over HTTP, proxy-friendly | No bidirectional channel (don't need one); WebSocket would be overkill |
 | Gateway→AI | Transparent SSE pipe | Minimal latency/overhead, preserves typed events | Gateway doesn't transform events (acceptable; validation lives at both ends) |
 | Mock provider | Deterministic templated output | Reproducible tests + demo with no GPU/model/cost | Not representative of real model quality (clearly labelled) |
-| Retrieval store | PostgreSQL + pgvector *(future)* | One store for metadata + lexical + vector; operationally simple | A dedicated vector DB would add ops surface without clear benefit at this scale |
+| Retrieval store | PostgreSQL + pgvector **(built, Phase 2)** | One store for metadata + lexical + vector; operationally simple | A dedicated vector DB would add ops surface without clear benefit at this scale |
+| PDF parser | pypdf (BSD-3) **(built, Phase 2)** | Permissive license, pure-Python, no system deps | Less layout-aware than PyMuPDF — but PyMuPDF is AGPL (see ADR-0010) |
+| DB driver | asyncpg (Apache-2.0) **(built, Phase 2)** | Permissive, async, fast; pgvector codec support | No ORM — raw SQL by choice (ADR-0012) |
+| Embeddings | deterministic + all-MiniLM-L6-v2 **(built, Phase 2)** | Reproducible default; real model is small/Apache-2.0/CPU-ok | Hashing provider is not semantic; real model is behind an optional extra |
+| Retrieval | FTS + pgvector + RRF **(built, Phase 2)** | Hybrid beats either leg; RRF is simple and robust | Reranking (cross-encoder) deferred to Phase 3 |
 | Inference server | vLLM *(future)* | High-throughput OpenAI-compatible serving of open weights | GPU required; isolated behind the provider abstraction |
 
 ## 5. Cross-cutting concerns

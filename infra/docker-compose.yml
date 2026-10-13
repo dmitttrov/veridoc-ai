@@ -5,11 +5,30 @@
 #   web (nginx, static)  ->  published on host :5173
 #   api (NestJS gateway) ->  published on host :3000  (the public edge)
 #   ai  (FastAPI)        ->  INTERNAL ONLY, no host port (see SECURITY.md)
+#   db  (postgres+pgvector) -> INTERNAL ONLY, no host port
 #
-# PostgreSQL + pgvector is intentionally NOT here yet — it arrives with
-# document ingestion (see docs/ROADMAP.md, Days 2–3).
+# The AI service runs pending migrations on start, then serves.
 
 services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: veridoc
+      POSTGRES_PASSWORD: veridoc
+      POSTGRES_DB: veridoc
+    # Internal only — no host port published.
+    expose:
+      - "5432"
+    volumes:
+      - veridoc_pgdata:/var/lib/postgresql/data
+    networks:
+      - veridoc
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U veridoc -d veridoc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   ai:
     build:
       context: ..
@@ -17,10 +36,15 @@ services:
     environment:
       AI_PROVIDER: mock
       AI_MODEL_NAME: veridoc-mock-0.1
+      AI_DATABASE_URL: postgresql://veridoc:veridoc@db:5432/veridoc
+      AI_EMBEDDING_PROVIDER: deterministic
     # No `ports:` mapping — the AI service is reachable only on the internal
     # network, by the gateway. Do not expose it to the host or the internet.
     expose:
       - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - veridoc
     healthcheck:
@@ -63,6 +87,9 @@ services:
       - api
     networks:
       - veridoc
+
+volumes:
+  veridoc_pgdata:
 
 networks:
   veridoc:

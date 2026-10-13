@@ -10,6 +10,8 @@ const EnvSchema = z.object({
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
   /** Upstream request timeout for the AI service, in milliseconds. */
   AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  /** Longer timeout for document ingestion (parsing + embedding). */
+  AI_INGEST_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
 
