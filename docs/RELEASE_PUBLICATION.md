@@ -55,6 +55,13 @@ adapter-v2 artifact lives on the GPU server at
 `README.md` (= `training/MODEL_CARD.md`). **Exclude:** `checkpoint-*/`,
 `optimizer.pt`, `training_args.bin`, any `data/`, and the base model weights.
 
+Explicit include list (verified present in `artifacts/adapter-v2/`):
+`adapter_config.json`, `adapter_model.safetensors`, `tokenizer.json`,
+`tokenizer_config.json`, `special_tokens_map.json`, `added_tokens.json`,
+`vocab.json`, `merges.txt`, `chat_template.jinja`, and `README.md` (replaced by
+the model card). Explicit exclude: `training_args.bin`, `training_metrics.json`,
+`checkpoint-*/` (optimizer/scheduler/rng/trainer state), any base weights, `data/`.
+
 ```bash
 # target id: <org>/veridoc-extract-qwen3-0.6b-lora   (experimental)
 export HF_TOKEN=***                      # write scope; never commit
@@ -63,12 +70,19 @@ from huggingface_hub import HfApi
 api = HfApi()
 repo = "<org>/veridoc-extract-qwen3-0.6b-lora"
 api.create_repo(repo, repo_type="model", private=True, exist_ok=True)   # start PRIVATE
+# Model card as README (overrides the training-saved README.md).
 api.upload_file(path_or_fileobj="training/MODEL_CARD.md", path_in_repo="README.md", repo_id=repo)
 api.upload_folder(
     repo_id=repo, folder_path="artifacts/adapter-v2",
-    allow_patterns=["adapter_model.safetensors","adapter_config.json","*.json",
-                    "*.jinja","vocab.json","merges.txt"],
-    ignore_patterns=["checkpoint-*","optimizer.pt","training_args.bin","**/data/**"],
+    allow_patterns=[
+        "adapter_config.json", "adapter_model.safetensors",
+        "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json",
+        "added_tokens.json", "vocab.json", "merges.txt", "chat_template.jinja",
+    ],
+    ignore_patterns=[
+        "checkpoint-*", "training_args.bin", "training_metrics.json",
+        "optimizer.pt", "README.md", "**/data/**",
+    ],
 )
 PY
 ```

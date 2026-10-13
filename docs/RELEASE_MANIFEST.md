@@ -7,7 +7,8 @@ during Phase 5A; see `docs/EVALUATION.md` for methodology and measured results.
 
 | Item | Value |
 | --- | --- |
-| Git commit (code baseline) | `c682c39` (Phase 4D); this manifest commits on top |
+| Private source commit (release baseline) | `edf6743` (Phase 5B; snapshot cut from here via `git archive`) |
+| Public snapshot | fresh single commit, **no upstream history** (see docs/RELEASE_PUBLICATION.md) |
 | Base model | `Qwen/Qwen3-0.6B` |
 | Base revision (pinned) | `c1899de289a04d12100db370d81485cdf75e47ca` |
 | Adapter **v2** (preferred) SHA-256 | `165518747f28f41e6c8fe5a673988ff58d6f2c90e2b3200085bbd86162b58497` |
