@@ -144,10 +144,62 @@ def _wilson_ci(p: float, n: int, z: float = 1.96) -> tuple[float, float]:
     return (round(max(0.0, center - half), 4), round(min(1.0, center + half), 4))
 
 
+def paired_bootstrap(
+    base_scores: list[dict],
+    adapter_scores: list[dict],
+    key: str,
+    n_boot: int = 10000,
+    seed: int = 0,
+) -> dict | None:
+    """Paired bootstrap of the base→adapter difference for a per-example 0/1 metric.
+
+    The SAME test examples are scored by both models, so the comparison must be
+    paired. We align by example id, resample example-pairs with replacement, and
+    report the 95% CI of the mean paired difference (adapter − base). "credible"
+    means the 95% CI excludes 0 — a far more honest test than non-overlapping
+    independent Wilson intervals.
+    """
+    import random
+
+    by_id_base = {s["id"]: s for s in base_scores}
+    pairs: list[tuple[float, float]] = []
+    for a in adapter_scores:
+        b = by_id_base.get(a["id"])
+        if b is not None and key in b and key in a:
+            pairs.append((float(b[key]), float(a[key])))
+    n = len(pairs)
+    if n == 0:
+        return None
+    rng = random.Random(seed)
+    mean_diff = sum(av - bv for bv, av in pairs) / n
+    boot: list[float] = []
+    for _ in range(n_boot):
+        s = 0.0
+        for _ in range(n):
+            bv, av = pairs[rng.randrange(n)]
+            s += av - bv
+        boot.append(s / n)
+    boot.sort()
+    lo = boot[int(0.025 * n_boot)]
+    hi = boot[int(0.975 * n_boot)]
+    return {
+        "n": n,
+        "mean_diff": round(mean_diff, 4),
+        "ci95": [round(lo, 4), round(hi, 4)],
+        "credible": bool(lo > 0 or hi < 0),
+    }
+
+
 def compare(base_report: dict, adapter_report: dict) -> dict:
-    """Base vs adapter deltas with Wilson CIs on key proportions."""
+    """Base vs adapter: aggregate deltas (+ Wilson CIs) AND a paired bootstrap.
+
+    Credibility is judged by the PAIRED bootstrap (CI of the per-example
+    difference excludes 0), not by independent Wilson-interval overlap.
+    """
     bm, am = base_report["metrics"], adapter_report["metrics"]
-    keys = ["schema_valid", "value_exact", "evidence_ref_valid", "abstention_recall"]
+    base_scores = base_report.get("details", [])
+    adapter_scores = adapter_report.get("details", [])
+    keys = ["schema_valid", "value_exact", "evidence_ref_valid", "metric_exact"]
     n = am.get("n", 0)
     out: dict[str, Any] = {"n": n, "metrics": {}}
     for k in keys:
@@ -155,10 +207,9 @@ def compare(base_report: dict, adapter_report: dict) -> dict:
         row: dict[str, Any] = {"base": b, "adapter": a}
         if isinstance(b, int | float) and isinstance(a, int | float):
             row["delta"] = round(a - b, 4)
-            row["base_ci95"] = _wilson_ci(b, n)
-            row["adapter_ci95"] = _wilson_ci(a, n)
-            # Credible improvement ≈ CIs do not overlap in the favourable direction.
-            row["credible_improvement"] = row["adapter_ci95"][0] > row["base_ci95"][1]
+            row["base_wilson_ci95"] = _wilson_ci(b, n)
+            row["adapter_wilson_ci95"] = _wilson_ci(a, n)
+        row["paired_bootstrap"] = paired_bootstrap(base_scores, adapter_scores, k)
         out["metrics"][k] = row
     return out
 

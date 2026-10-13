@@ -104,14 +104,27 @@ Hugging Face publication.
 - [x] Draft model card, dataset card, release checklist (nothing published).
 - [x] No-network **CPU training smoke test** (tiny random Qwen3) in the suite.
 
-**Conditional on GPU (not run here — no suitable/authorized GPU)**
-- [ ] Real base-model baseline + full LoRA run + adapter benchmark with measured
-      before/after numbers and CIs (exact commands in `training/README.md`).
+## Phase 4B — first GPU experiment ✅ (executed)
 
-## Phase 5 (planned) — Production hardening + (approved) publication
+Ran the full pipeline on 1× RTX PRO 6000 Blackwell (GPU 0; isolated env; shared
+services untouched):
+- [x] Preflight; isolated CUDA-12.8 venv; bf16 + Qwen3 load + PEFT init verified.
+- [x] Baseline on the full 42-example test set (schema_valid 0.714, value_exact 0.75).
+- [x] 10-step pilot (finite loss, checkpoint save + reload, no OOM).
+- [x] Full LoRA (3 epochs, 36 steps, 92.9 s, peak 2.23 GB, 39 MB adapter).
+- [x] Adapter eval + **paired-bootstrap** comparison: schema_valid 0.714→1.0,
+      value_exact 0.75→1.0, metric_exact 0.75→1.0 (all credible); evidence_ref
+      already 1.0.
+- [x] Independent adapter load + representative inference (matches gold).
 
-Real GPU training run → fill the model card with measured metrics → execute the
-release checklist (adapter-only HF upload) once approved; OpenTelemetry, rate
+Result is a **credible improvement on synthetic/templated data only** — not a
+real-filing claim. See `docs/EVALUATION.md`.
+
+## Phase 5 (planned) — Real-document eval + (approved) publication
+
+Build a **real financial-document** evaluation set → re-measure base vs adapter
+(expect regression vs the synthetic ceiling) → if justified, execute the release
+checklist (adapter-only HF upload) once approved; plus OpenTelemetry, rate
 limiting, and a containerized vLLM serving path for the adapter.
 
 ---

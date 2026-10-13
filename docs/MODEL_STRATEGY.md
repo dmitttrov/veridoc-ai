@@ -118,10 +118,18 @@ When quality justifies it and only after explicit approval:
 
 | Item | Status |
 | --- | --- |
-| Provider abstraction + mock | **Done** |
-| OpenAI-compatible / vLLM provider | Planned (Days 8–9) |
-| Base model selection (ADR) | Not started |
-| Dataset + data card | Not started |
-| Evaluation harness | Planned (Days 10–11) |
-| LoRA/QLoRA training | Planned (Days 12–13) |
-| Hugging Face publication | Not started — requires explicit approval |
+| Provider abstraction + mock | **Done** (Phase 1) |
+| OpenAI-compatible / vLLM provider | **Done** (Phase 3) |
+| Base model selection (ADR) | **Done** — Qwen3-0.6B pinned (ADR-0021) |
+| Dataset + data card | **Done** — synthetic v1, 186/60/42, hashed |
+| Evaluation harness | **Done** (Phase 3–4) |
+| LoRA training | **Done & executed** (Phase 4B, real GPU) |
+| Base-vs-adapter benchmark | **Done** — measured, paired, credible on synthetic set |
+| Hugging Face publication | Not started — requires explicit approval + real-doc eval |
+
+**Phase 4B executed (real GPU):** a LoRA adapter over Qwen3-0.6B was trained and
+evaluated on 1× RTX PRO 6000 Blackwell. On the synthetic held-out set it shows a
+credible, paired-bootstrap improvement (schema_valid 0.71→1.0, value_exact
+0.75→1.0; see `docs/EVALUATION.md`). This is a controlled proof-of-pipeline on
+templated synthetic data — **not** a real-filing capability claim — so
+publication still waits on a real-document evaluation and explicit approval.

@@ -94,22 +94,48 @@ schema validity, exact metric/value/unit/period, evidence-ref validity,
 abstention precision/recall, injection resistance, latency; Wilson 95% CIs on
 the base-vs-adapter comparison).
 
-**Status: implemented and CPU-smoke-verified; the real benchmark was NOT run to
-completion.** This machine has only a 4 GB Turing GPU with a CPU-only torch and
-no authorization to install CUDA drivers, and CPU inference of the 0.6B base
-model proved impractically slow (a 12-example baseline did not finish in ~8+
-minutes, because the un-tuned base rambles to the token cap). Therefore:
+**Status: EXECUTED (Phase 4B) on 1× NVIDIA RTX PRO 6000 Blackwell (96 GB),
+driver 580.178.04, torch 2.11.0+cu128, bf16.** GPU 0 only; the second GPU and
+all shared services were left untouched. Dataset built deterministically
+(186/60/42; test split SHA-256 `e3f80775…22f6`).
 
-- The dataset builds deterministically (186/60/42 train/val/test; see
-  `data/v1/dataset_card.json`).
-- The LoRA training path is verified by a no-network **CPU smoke test** (tiny
-  randomly-initialized Qwen3 + LoRA + 2 steps + adapter save/reload).
-- **No base-model or adapter quality numbers are reported** — reporting any
-  would be fabrication. The model card's metric tables are explicit TBDs.
+Decoding: greedy (temperature 0), `enable_thinking=False`, Qwen3 chat template,
+identical for base and adapter. n = 42 held-out test examples.
 
-To obtain real numbers on a suitable GPU, run the exact commands in
-`training/README.md` (baseline → train → adapter eval → compare). Recommended
-hardware: bf16-capable (Ampere+) GPU, ≥16 GB (or ≥8 GB with QLoRA).
+| Metric | Base Qwen3-0.6B | + LoRA adapter | Paired Δ (95% CI, bootstrap) |
+| --- | --- | --- | --- |
+| JSON parse success | 1.000 | 1.000 | — |
+| schema_valid | 0.714 | 1.000 | **+0.286 [0.167, 0.429]** |
+| value_exact (n=28) | 0.750 | 1.000 | **+0.250 [0.107, 0.429]** |
+| metric_exact | 0.750 | 1.000 | **+0.250 [0.107, 0.429]** |
+| unit_correct | 0.750 | 1.000 | — |
+| period_correct | 1.000 | 1.000 | — |
+| evidence_ref_valid | 1.000 | 1.000 | 0.000 [0, 0] |
+| abstention precision / recall | 1.00 / 0.857 | 1.00 / 1.00 | — |
+| injection_resistance | 1.000 | 1.000 | — |
+| mean latency (greedy) | 0.99 s | 1.12 s | — |
+
+**Paired comparison (not Wilson overlap):** credibility is judged by a paired
+bootstrap over the *same* 42 examples (10k resamples). schema_valid, value_exact
+and metric_exact each improve with a 95% CI of the per-example difference that
+excludes 0; evidence_ref_valid was already 1.0 (no change).
+
+Per-category (base → adapter): **answerable** 14/14 → 14/14 (already solved);
+**conflicting** value_exact 0/7 → 7/7 (base ignored the restatement; adapter
+learned to prefer it); **injection** 7/7 → 7/7 (both resist); **unanswerable**
+schema-valid 2/14 → 14/14 and abstention 12/14 → 14/14 (adapter emits
+schema-valid abstentions).
+
+Training: 36 optimizer steps (3 epochs) in **92.9 s**, **peak 2.23 GB** VRAM,
+adapter **39 MB**, final train loss 0.18, val loss 0.0014.
+
+> ⚠️ **Synthetic benchmark, not real financial-document performance.** The
+> corpus is small, fictional, and templated; the adapter fit it almost perfectly
+> (val loss ~0.001), so the near-ceiling adapter scores mainly reflect learning
+> the dataset's output conventions (JSON schema, restatement preference,
+> schema-valid abstention). This is a controlled proof-of-pipeline with a
+> credible, honestly-measured improvement on *this* benchmark — **not** evidence
+> of real-filing capability. Reproduce with the commands in `training/README.md`.
 
 ## Threats to validity
 

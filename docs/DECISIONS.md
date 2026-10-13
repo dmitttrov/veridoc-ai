@@ -356,6 +356,38 @@ training package.
 **Consequences.** The app and its CI stay lean; training deps are opt-in. Real
 GPU training/eval are explicit commands, not CI steps. **Status: Accepted.**
 
+## ADR-0024 — Paired bootstrap for base-vs-adapter comparison; GPU inference path
+
+**Context.** Phase 4B compares base and adapter on the *same* held-out
+examples. Judging credibility by non-overlapping independent Wilson intervals is
+statistically wrong for paired data and overstates significance.
+
+**Decision.** Credibility is decided by a **paired bootstrap** (10k resamples)
+over per-example score differences on the shared test set; "credible" means the
+95% CI of the mean difference excludes 0. Wilson intervals are still reported for
+context but are not the decision rule. Also fixed the eval inference path to
+place the model on CUDA and pass an attention mask (both base and adapter use
+the identical GPU greedy path).
+
+**Consequences.** Honest, paired significance (schema_valid, value_exact,
+metric_exact credible; evidence_ref_valid unchanged). The comparison is only as
+meaningful as the (synthetic) test set — see EVALUATION.md. **Status: Accepted.**
+
+## ADR-0025 — Phase 4B executed on the GPU server; synthetic-only claim
+
+**Context.** First real GPU run of the Phase 4 pipeline on a dual RTX PRO 6000
+Blackwell server (GPU 0 only; isolated venv bootstrapped without touching system
+Python/drivers/services; CUDA-12.8 torch for Blackwell).
+
+**Decision.** Record the measured result as a **controlled proof-of-pipeline on
+templated synthetic data** — a credible paired improvement — and explicitly do
+**not** claim real-financial-document capability. Server connection details and
+all artifacts (data, checkpoints, adapter) stay out of Git; only measured
+numbers and code enter the repo.
+
+**Consequences.** Publication remains blocked on a real-document evaluation and
+explicit approval (see RELEASE_CHECKLIST.md). **Status: Accepted.**
+
 ## ADR-0009 — Fine-tune via LoRA/QLoRA on an open-weight base *(planned)*
 
 **Context.** We want a domain-adapted model without the cost or honesty problems

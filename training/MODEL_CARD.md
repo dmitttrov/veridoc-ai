@@ -51,11 +51,13 @@ pipeline_tag: text-generation
 ## Training
 
 - **Method:** supervised fine-tuning with LoRA (PEFT) on prompt-masked
-  completions (JSON targets). Greedy decoding at eval. Deterministic seed.
-- **Config:** see `training/veridoc_ft/config.py` (r=16, α=32, dropout=0.05,
-  targets = Qwen3 attention+MLP projections) and the committed
-  `training_metrics.json` from the run.
-- **Compute:** _fill from the run_ (device, VRAM peak, wall-clock).
+  completions (JSON targets). Greedy decoding at eval. Deterministic seed=42.
+- **Config:** r=16, α=32, dropout=0.05, targets = Qwen3 attention+MLP
+  projections; lr 2e-4, 3 epochs, batch 1 × grad-accum 16, bf16, gradient
+  checkpointing. 186 train / 60 val examples, 36 optimizer steps.
+- **Compute (measured):** 1× NVIDIA RTX PRO 6000 Blackwell (96 GB); training
+  wall-clock **92.9 s**, **peak 2.23 GB** VRAM; adapter **39 MB**. Final train
+  loss 0.18 (curve 1.14→0.0003), validation loss 0.0014. torch 2.11.0+cu128.
 
 ## Data
 
@@ -71,17 +73,32 @@ Held-out test set; identical decoding for base and adapter. Metrics: JSON parse
 success, schema validity, exact metric/value/unit/period, evidence-reference
 validity, abstention precision/recall, injection resistance, latency.
 
-| Metric | Base (Qwen3-0.6B) | + LoRA adapter |
-| --- | --- | --- |
-| schema_valid | _TBD_ | _TBD_ |
-| value_exact | _TBD_ | _TBD_ |
-| evidence_ref_valid | _TBD_ | _TBD_ |
-| abstention_recall | _TBD_ | _TBD_ |
+Measured on 1× RTX PRO 6000 Blackwell, greedy decoding, n=42 held-out test.
 
-> **Numbers pending a GPU run.** As of this draft the end-to-end base/adapter
-> benchmark on real hardware has **not been run** (see the project Phase 4
-> report). Fill from `artifacts/baseline.json` and `artifacts/adapter.json`;
-> do not publish without real measurements and 95% CIs.
+| Metric | Base (Qwen3-0.6B) | + LoRA adapter | Paired Δ (95% CI) |
+| --- | --- | --- | --- |
+| JSON parse success | 1.000 | 1.000 | — |
+| schema_valid | 0.714 | 1.000 | +0.286 [0.167, 0.429] ✓ |
+| value_exact (n=28 supported) | 0.750 | 1.000 | +0.250 [0.107, 0.429] ✓ |
+| metric_exact | 0.750 | 1.000 | +0.250 [0.107, 0.429] ✓ |
+| unit_correct | 0.750 | 1.000 | — |
+| period_correct | 1.000 | 1.000 | — |
+| evidence_ref_valid | 1.000 | 1.000 | 0.000 [0,0] |
+| abstention precision / recall | 1.00 / 0.857 | 1.00 / 1.00 | — |
+| injection_resistance | 1.000 | 1.000 | — |
+| mean latency (greedy) | 0.99 s | 1.12 s | — |
+
+"✓" = paired-bootstrap 95% CI of the per-example difference excludes 0 (credible
+improvement). Per-category, the gains come from **conflicting** (restated-figure)
+value extraction (0/7 → 7/7) and **schema-valid abstention** on unanswerable
+items (2/14 → 14/14 schema-valid).
+
+> ⚠️ **Synthetic-benchmark result — NOT real-document performance.** The dataset
+> is small (186/60/42), fictional, and **templated**; the adapter fit it almost
+> perfectly (val loss ~0.001), so these near-ceiling numbers chiefly show the
+> model learned the dataset's output conventions. They do **not** measure
+> performance on real financial filings (tables, footnotes, OCR, messy numerics)
+> and must not be presented as such. Treat as a controlled proof-of-pipeline.
 
 ## How to use (adapter loading)
 

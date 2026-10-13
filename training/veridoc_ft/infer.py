@@ -25,6 +25,8 @@ def load_model(config: TrainConfig, adapter_path: str | None = None) -> tuple[An
 
         model = PeftModel.from_pretrained(model, adapter_path)
         label = f"adapter:{adapter_path}"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)
     model.eval()
     model.generation_label = label  # type: ignore[attr-defined]
     return model, tokenizer
@@ -35,15 +37,17 @@ def generate_text(
     model: Any, tokenizer: Any, question: str, evidence: list[str], config: TrainConfig
 ) -> str:
     messages = build_messages(question, evidence)
-    inputs = tokenizer.apply_chat_template(
+    enc = tokenizer.apply_chat_template(
         messages,
         tokenize=True,
         add_generation_prompt=True,
         enable_thinking=False,
+        return_dict=True,
         return_tensors="pt",
-    ).to(model.device)
+    )
+    enc = {k: v.to(model.device) for k, v in enc.items()}
     out = model.generate(
-        inputs,
+        **enc,
         max_new_tokens=config.max_new_tokens,
         do_sample=False,  # greedy, deterministic
         temperature=None,
@@ -51,7 +55,7 @@ def generate_text(
         top_k=None,
         pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
     )
-    new_tokens = out[0][inputs.shape[1] :]
+    new_tokens = out[0][enc["input_ids"].shape[1] :]
     return tokenizer.decode(new_tokens, skip_special_tokens=True)
 
 

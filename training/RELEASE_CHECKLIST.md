@@ -1,21 +1,25 @@
-# Hugging Face Release Checklist (Veridoc Extract LoRA) — NOT YET EXECUTED
+# Hugging Face Release Checklist (Veridoc Extract LoRA) — NOT YET PUBLISHED
 
 Do not publish until every box is checked and explicitly approved by the owner.
+Phase 4B executed the first real GPU run; boxes it satisfied are checked.
 
 ## Evidence & correctness
-- [ ] GPU (or sufficient) run completed; `artifacts/baseline.json` and
-      `artifacts/adapter.json` committed-as-generated (never hand-edited).
-- [ ] Adapter shows a **credible** improvement over base (non-overlapping 95%
-      CIs on at least the headline metric) OR the card honestly reports no/mixed
-      improvement.
-- [ ] Per-category deltas and failure examples reviewed.
-- [ ] Latency and peak VRAM recorded.
+- [x] GPU run completed on 1× RTX PRO 6000 Blackwell; baseline/adapter/comparison
+      reports generated (kept on the server, out of Git).
+- [x] Adapter shows a **credible paired** improvement on the synthetic benchmark
+      (paired-bootstrap 95% CI of the per-example diff excludes 0 for
+      schema_valid, value_exact, metric_exact).
+- [x] Per-category deltas reviewed (gains: conflicting, schema-valid abstention).
+- [x] Latency and peak VRAM recorded (train peak 2.23 GB; infer peak ~1.3 GB).
+- [ ] **BLOCKER: real financial-document evaluation.** Current numbers are on
+      templated synthetic data only and must not be presented as real-filing
+      performance. A real-document eval set is required before release.
 
 ## Model card
-- [ ] `MODEL_CARD.md` metric tables filled with **measured** numbers + CIs.
-- [ ] Compute section filled (device, VRAM, duration).
-- [ ] Intended use / out-of-scope / limitations reviewed.
-- [ ] "Not financial advice", "not fine-tuned from scratch", "adapter only".
+- [x] `MODEL_CARD.md` metric tables filled with **measured** numbers + paired CIs.
+- [x] Compute section filled (device, VRAM, duration).
+- [x] Intended use / out-of-scope / limitations reviewed; synthetic caveat added.
+- [x] "Not financial advice", "not fine-tuned from scratch", "adapter only".
 
 ## Data & licensing
 - [ ] `dataset_card.json` provenance/license accurate; data is synthetic only.
