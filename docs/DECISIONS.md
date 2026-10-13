@@ -210,6 +210,99 @@ Phase 2 (no generation).
 pure and unit-tested; the measured corpus evaluation reports Recall@5 and
 MRR@10. **Status: Accepted.**
 
+## ADR-0016 — Exact vector search (no ANN index) at current scale
+
+**Context.** Migration 0001 created an `ivfflat` index for cosine search. On the
+small evaluation corpus this produced **non-deterministic, incomplete** results
+(approximate search over mostly-empty inverted lists), which broke reproducible
+evaluation and surfaced as recall varying run-to-run.
+
+**Decision.** Migration 0002 drops the `ivfflat` index so pgvector performs
+**exact** nearest-neighbour search (sequential scan) — deterministic and fully
+recalled. A tuned **HNSW** index will be reintroduced when the corpus is large
+enough that exact scan is too slow.
+
+**Consequences.** Reproducible, correct retrieval now; O(n) vector scan is fine
+at this scale. Reintroducing ANN later is a migration + an eval re-run to quantify
+the recall/latency trade. **Status: Accepted.**
+
+## ADR-0017 — Deterministic PDF fixtures (reportlab `invariant=1`)
+
+**Context.** `reportlab` embeds timestamps and a random document id by default,
+so building the same fixture PDF twice produced **different bytes** → different
+SHA-256 → ingestion created duplicate documents and polluted retrieval.
+
+**Decision.** Build fixtures with `canvas.Canvas(..., invariant=1)`, which emits
+byte-identical output for identical input.
+
+**Consequences.** Stable content hashes make ingestion genuinely idempotent and
+the evaluation reproducible. **Status: Accepted.**
+
+## ADR-0018 — Cross-encoder reranking (two-stage retrieval)
+
+**Context.** First-stage hybrid retrieval (RRF) orders by cheap signals; a
+cross-encoder scoring (query, passage) pairs is more accurate but too costly for
+the whole corpus.
+
+**Decision.** Two-stage pipeline: RRF top-N candidates → optional reranker →
+top-k. Rerankers are pluggable: `none` (default), `deterministic` (reproducible,
+no deps), and `cross-encoder` (`cross-encoder/ms-marco-MiniLM-L-6-v2`,
+**Apache-2.0**, CPU-capable, optional `[embeddings]` extra). The reranker score
+is kept in a separate field from the RRF `fused` score — the two are never
+compared or combined. If a configured real reranker fails to load, the factory
+returns `None` (explicit fallback) and responses report `reranked=false`;
+reranking is never silently faked.
+
+**Consequences.** Measured on the eval corpus, reranking improves MRR@10 and can
+slightly reduce Recall@5 (a real precision/recall trade — see EVALUATION.md).
+No hidden downloads in tests/CI (default is `none`/`deterministic`).
+**Status: Accepted.**
+
+## ADR-0019 — OpenAI-compatible inference provider; no silent fallback
+
+**Context.** Phase 3 needs real generation without paid APIs and without
+exposing an internal model server.
+
+**Decision.** `OpenAICompatibleProvider` talks to a configurable local
+OpenAI-compatible server (incl. vLLM) via `/chat/completions`. Config:
+`AI_INFERENCE_PROVIDER` (`mock` default | `openai_compatible`),
+`AI_INFERENCE_BASE_URL/MODEL/API_KEY/TIMEOUT_S/MAX_TOKENS/TEMPERATURE`. The mock
+is the default and the CI backend. On timeout / connection failure / malformed
+response / upstream error the provider raises `InferenceError` (buffered path)
+or emits a terminal `error` SSE event (streaming path) — it **never** silently
+falls back to the mock. Prompts, document content, responses, and API keys are
+never logged.
+
+**Consequences.** Real inference is a config change; the internal server stays
+private behind the gateway. Integration tests run against an in-process fake
+OpenAI server (no network). **Status: Accepted.**
+
+## ADR-0020 — Grounded RAG: evidence markers, citation verification, verify-then-stream
+
+**Context.** Answers about documents must be grounded, must not obey instructions
+embedded in documents, and must carry verifiable citations — without
+misrepresenting citation validity as factual support.
+
+**Decision.**
+- Evidence passages are assembled with short markers (`[E1]`, `[E2]`, …), framed
+  explicitly as **untrusted data** the model must never obey.
+- The model is told to cite markers and to output a fixed sentinel when evidence
+  is insufficient (abstention).
+- **Citation verification** maps emitted markers back to retrieved chunks:
+  markers that don't map are **fabricated** — stripped from the answer and
+  counted (`invalidCitationCount`). Valid citations carry `chunkId` + character
+  span, traceable to stored page text.
+- **Validity ≠ support**: verification only proves the reference exists; it does
+  not check the evidence substantiates the claim. The UI and docs state this.
+- **Streaming safety**: the full answer is generated and its citations verified
+  **before** any token is streamed to the client (verify-then-stream). This
+  trades first-token latency for the guarantee that users never see unverified,
+  fabricated-citation content as a final answer.
+
+**Consequences.** Strong grounding/verifiability guarantees at the cost of
+first-token latency. Context is bounded (top-k passages, per-passage char cap).
+**Status: Accepted.**
+
 ## ADR-0009 — Fine-tune via LoRA/QLoRA on an open-weight base *(planned)*
 
 **Context.** We want a domain-adapted model without the cost or honesty problems

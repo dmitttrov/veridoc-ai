@@ -5,6 +5,7 @@ import { CONFIG, loadConfig } from './config';
 import { DocumentsController } from './documents/documents.controller';
 import { UploadController } from './documents/upload.controller';
 import { HealthController } from './health/health.controller';
+import { RagController } from './rag/rag.controller';
 import { RetrieveController } from './retrieve/retrieve.controller';
 
 @Module({
@@ -14,6 +15,7 @@ import { RetrieveController } from './retrieve/retrieve.controller';
     DocumentsController,
     UploadController,
     RetrieveController,
+    RagController,
   ],
   providers: [
     {

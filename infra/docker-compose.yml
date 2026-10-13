@@ -34,10 +34,11 @@ services:
       context: ..
       dockerfile: infra/docker/ai.Dockerfile
     environment:
-      AI_PROVIDER: mock
+      AI_INFERENCE_PROVIDER: mock
       AI_MODEL_NAME: veridoc-mock-0.1
       AI_DATABASE_URL: postgresql://veridoc:veridoc@db:5432/veridoc
       AI_EMBEDDING_PROVIDER: deterministic
+      AI_RERANKER_PROVIDER: deterministic
     # No `ports:` mapping — the AI service is reachable only on the internal
     # network, by the gateway. Do not expose it to the host or the internet.
     expose:

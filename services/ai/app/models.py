@@ -50,6 +50,11 @@ class Citation(CamelModel):
     document_title: str
     page: Annotated[int, Field(gt=0)]
     snippet: Annotated[str, Field(min_length=1)]
+    # Phase 3 (grounded RAG): traceability to exact stored evidence.
+    chunk_id: str | None = None
+    char_start: int | None = None
+    char_end: int | None = None
+    marker: str | None = None
 
 
 # --- Streaming events (discriminated union on `type`) ----------------------
@@ -70,6 +75,9 @@ class DoneEvent(CamelModel):
     mock: bool
     model: str
     token_count: Annotated[int, Field(ge=0)]
+    # Phase 3 (grounded RAG) optional fields.
+    abstained: bool | None = None
+    invalid_citation_count: int | None = None
 
 
 class ErrorEvent(CamelModel):
@@ -125,12 +133,14 @@ class RetrievalRequest(CamelModel):
     query: Annotated[str, Field(min_length=1, max_length=2000)]
     document_ids: Annotated[list[str], Field(default_factory=list, max_length=50)]
     top_k: Annotated[int, Field(default=5, gt=0, le=50)]
+    rerank: bool | None = None
 
 
 class RetrievalScores(CamelModel):
     lexical: float
     semantic: float
     fused: float
+    rerank: float | None = None
 
 
 class RetrievedPassage(CamelModel):
@@ -150,3 +160,15 @@ class RetrievalResponse(CamelModel):
     passages: list[RetrievedPassage]
     embedding_model: str
     embedding_dim: int = Field(gt=0)
+    reranked: bool = False
+    reranker_model: str | None = None
+
+
+# --- Phase 3: grounded RAG -------------------------------------------------
+
+
+class RagRequest(CamelModel):
+    question: Annotated[str, Field(min_length=1, max_length=2000)]
+    document_ids: Annotated[list[str], Field(default_factory=list, max_length=50)]
+    top_k: Annotated[int, Field(default=5, gt=0, le=20)]
+    rerank: bool | None = None

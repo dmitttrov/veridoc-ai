@@ -1,8 +1,44 @@
 # Veridoc AI — Architecture
 
-This document describes the system as it exists after **Phase 2 (ingestion +
-retrieval)** and the seams designed in for later phases. Work built now and
-future work are labelled throughout.
+This document describes the system as it exists after **Phase 3 (reranking +
+grounded generation)** and the seams designed in for later phases. Work built
+now and future work are labelled throughout.
+
+## Phase 3 additions (reranking + real inference + grounded RAG)
+
+Phase 3 adds a trustworthy answer path on top of Phase 2 retrieval:
+
+- **Cross-encoder reranking** (optional, pluggable): RRF top-N → reranker →
+  top-k. Providers: `none` (default), `deterministic` (reproducible, no deps),
+  `cross-encoder` (`ms-marco-MiniLM-L-6-v2`, Apache-2.0). Reranker scores are
+  kept separate from RRF scores; an unavailable real reranker falls back
+  explicitly (`reranked=false`), never silently.
+- **Real inference** via `OpenAICompatibleProvider` behind the existing
+  `InferenceProvider` seam — targets a local OpenAI-compatible server (incl.
+  vLLM). The mock stays the default and CI backend; the provider never silently
+  falls back to the mock.
+- **Grounded RAG** (`POST /v1/rag/answer` → gateway `POST /api/rag`):
+  question → hybrid retrieval (+optional rerank) → evidence assembly (passages
+  framed as untrusted data with `[E1]…` markers) → LLM → **citation
+  verification** → **verify-then-stream** of the validated answer (SSE).
+
+RAG data flow:
+
+```
+browser → POST /api/rag (gateway: validate)
+        → POST /v1/rag/answer (AI service)
+             → retrieve (+rerank)  → assemble evidence ([E1]… markers, untrusted-data framing)
+             → provider.generate() [BUFFERED]   (mock | openai_compatible)
+             → verify citations: markers → retrieved chunks; fabricated → stripped+counted
+             → stream the VERIFIED answer token-by-token, then a citations event, then done
+```
+
+Key safety properties: retrieved text is never executed and is marked untrusted;
+the model is instructed to ignore instructions inside evidence; citation
+*validity* (marker→chunk) is verified and is explicitly **not** the same as
+citation *support*; nothing is streamed until verification completes.
+
+---
 
 ## Phase 2 additions (ingestion + hybrid retrieval)
 
@@ -147,8 +183,9 @@ packages/contracts — shared TypeScript types + zod schemas (single source of t
 | PDF parser | pypdf (BSD-3) **(built, Phase 2)** | Permissive license, pure-Python, no system deps | Less layout-aware than PyMuPDF — but PyMuPDF is AGPL (see ADR-0010) |
 | DB driver | asyncpg (Apache-2.0) **(built, Phase 2)** | Permissive, async, fast; pgvector codec support | No ORM — raw SQL by choice (ADR-0012) |
 | Embeddings | deterministic + all-MiniLM-L6-v2 **(built, Phase 2)** | Reproducible default; real model is small/Apache-2.0/CPU-ok | Hashing provider is not semantic; real model is behind an optional extra |
-| Retrieval | FTS + pgvector + RRF **(built, Phase 2)** | Hybrid beats either leg; RRF is simple and robust | Reranking (cross-encoder) deferred to Phase 3 |
-| Inference server | vLLM *(future)* | High-throughput OpenAI-compatible serving of open weights | GPU required; isolated behind the provider abstraction |
+| Retrieval | FTS + pgvector (exact) + RRF **(built, Phase 2)** | Hybrid beats either leg; RRF simple/robust; exact search is deterministic at this scale | ANN (HNSW) deferred until the corpus needs it (ADR-0016) |
+| Reranking | ms-marco-MiniLM-L-6-v2 (Apache-2.0) **(built, Phase 3)** | More accurate top ranking; CPU-capable; optional | Improves MRR but can trade Recall@5; pluggable + deterministic fallback |
+| Generation | OpenAI-compatible provider (vLLM-ready) **(built, Phase 3)** | Local, no paid API; mock default; no silent fallback | GPU needed for a real model; isolated behind the provider seam |
 
 ## 5. Cross-cutting concerns
 

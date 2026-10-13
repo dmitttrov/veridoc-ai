@@ -3,6 +3,7 @@ import type {
   ChatRequest,
   DocumentIngestionResult,
   DocumentSummary,
+  RagRequest,
   RetrievalRequest,
   RetrievalResponse,
   StoredDocument,
@@ -148,11 +149,33 @@ export class AiClient {
    * (from the caller) is combined with an internal timeout.
    */
   async openChatStream(body: ChatRequest, signal: AbortSignal): Promise<Response> {
-    const url = `${this.config.AI_SERVICE_URL}/v1/chat/stream`;
+    return this.openStream('/v1/chat/stream', body, signal);
+  }
+
+  /**
+   * Open the upstream grounded-RAG SSE stream. The AI service buffers and
+   * verifies citations before emitting; the gateway pipes the verified bytes.
+   */
+  async openRagStream(body: RagRequest, signal: AbortSignal): Promise<Response> {
+    return this.openStream('/v1/rag/answer', body, signal);
+  }
+
+  private async openStream(
+    path: string,
+    body: unknown,
+    signal: AbortSignal,
+  ): Promise<Response> {
+    const url = `${this.config.AI_SERVICE_URL}${path}`;
     const timeoutController = new AbortController();
+    // RAG buffers a full generation before streaming, so use the longer
+    // ingest-class timeout for it; plain chat uses the request timeout.
+    const timeoutMs =
+      path === '/v1/rag/answer'
+        ? this.config.AI_INGEST_TIMEOUT_MS
+        : this.config.AI_REQUEST_TIMEOUT_MS;
     const timeout = setTimeout(
       () => timeoutController.abort(new Error('AI service request timed out')),
-      this.config.AI_REQUEST_TIMEOUT_MS,
+      timeoutMs,
     );
 
     // Abort upstream if either the client disconnects or the timeout fires.
@@ -176,7 +199,7 @@ export class AiClient {
     } catch (err) {
       clearTimeout(timeout);
       signal.removeEventListener('abort', onAbort);
-      this.logger.error(`Failed to open chat stream: ${(err as Error).message}`);
+      this.logger.error(`Failed to open stream ${path}: ${(err as Error).message}`);
       throw err;
     }
   }

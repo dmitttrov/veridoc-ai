@@ -27,6 +27,7 @@ from app.models import (
     RetrievalScores,
     RetrievedPassage,
 )
+from app.reranking.base import Reranker
 
 # RRF constant. 60 is the value from the original Cormack et al. paper and is a
 # robust default; larger values flatten the contribution of top ranks.
@@ -60,6 +61,7 @@ class _Candidate:
     lexical: float = 0.0
     semantic: float = 0.0
     fused: float = 0.0
+    rerank: float | None = None
 
 
 _LEXICAL_SQL = """
@@ -109,10 +111,18 @@ async def retrieve(
     pool: asyncpg.Pool,
     embedder: EmbeddingProvider,
     request: RetrievalRequest,
+    reranker: Reranker | None = None,
+    *,
+    rerank_candidate_k: int = 20,
 ) -> RetrievalResponse:
-    doc_filter = _to_uuid_list(request.document_ids)
-    candidate_pool = max(request.top_k * 4, 20)
+    # Decide whether reranking applies: a reranker must exist AND the request
+    # must not have explicitly disabled it.
+    apply_rerank = reranker is not None and request.rerank is not False
+    # First stage must surface enough candidates for the reranker to reorder.
+    first_stage_k = max(rerank_candidate_k, request.top_k) if apply_rerank else request.top_k
+    candidate_pool = max(first_stage_k, request.top_k * 4, 20)
 
+    doc_filter = _to_uuid_list(request.document_ids)
     query_vec = (await asyncio.to_thread(embedder.embed, [request.query]))[0]
     has_semantic = any(v != 0.0 for v in query_vec)
 
@@ -129,7 +139,6 @@ async def retrieve(
         )
 
     candidates: dict[uuid.UUID, _Candidate] = {}
-
     for row in lexical_rows:
         cand = candidates.setdefault(row["id"], _candidate_from_row(row))
         cand.lexical = float(row["score"])
@@ -146,10 +155,28 @@ async def retrieve(
     for cand in candidates.values():
         cand.fused = fused.get(str(cand.chunk_id), 0.0)
 
-    ordered = sorted(
-        candidates.values(),
-        key=lambda c: (-c.fused, str(c.chunk_id)),
-    )[: request.top_k]
+    # First stage: order by RRF and keep the candidate window.
+    first_stage = sorted(
+        candidates.values(), key=lambda c: (-c.fused, str(c.chunk_id))
+    )[:first_stage_k]
+
+    reranked = False
+    reranker_model: str | None = None
+    if apply_rerank and first_stage and reranker is not None:
+        scores = await asyncio.to_thread(
+            reranker.score, request.query, [c.text for c in first_stage]
+        )
+        for cand, score in zip(first_stage, scores, strict=True):
+            cand.rerank = float(score)
+        # Second stage: order by reranker score; RRF + id break ties stably.
+        final = sorted(
+            first_stage,
+            key=lambda c: (-(c.rerank if c.rerank is not None else 0.0), -c.fused, str(c.chunk_id)),
+        )[: request.top_k]
+        reranked = True
+        reranker_model = reranker.model_id
+    else:
+        final = first_stage[: request.top_k]
 
     passages = [
         RetrievedPassage(
@@ -164,10 +191,11 @@ async def retrieve(
                 lexical=round(c.lexical, 6),
                 semantic=round(c.semantic, 6),
                 fused=round(c.fused, 6),
+                rerank=round(c.rerank, 6) if c.rerank is not None else None,
             ),
             citation=f"{c.document_title}, p.{c.page_number}",
         )
-        for c in ordered
+        for c in final
     ]
 
     return RetrievalResponse(
@@ -175,4 +203,6 @@ async def retrieve(
         passages=passages,
         embedding_model=embedder.model_id,
         embedding_dim=embedder.dim,
+        reranked=reranked,
+        reranker_model=reranker_model,
     )

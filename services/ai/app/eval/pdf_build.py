@@ -30,12 +30,18 @@ def _wrap(text: str, width: int = 95) -> list[str]:
 
 
 def build_pdf(pages: list[str]) -> bytes:
-    """Render each string in ``pages`` as its own PDF page of text."""
+    """Render each string in ``pages`` as its own PDF page of text.
+
+    ``invariant=1`` makes reportlab emit byte-for-byte identical output for the
+    same input (fixed timestamps and document id). That determinism is essential:
+    it gives a stable SHA-256 content hash, which is what makes ingestion
+    idempotent and the evaluation reproducible.
+    """
     from reportlab.lib.pagesizes import LETTER
     from reportlab.pdfgen import canvas
 
     buf = BytesIO()
-    c = canvas.Canvas(buf, pagesize=LETTER)
+    c = canvas.Canvas(buf, pagesize=LETTER, invariant=1)
     width, height = LETTER
     for text in pages:
         y = height - 72
@@ -56,7 +62,7 @@ def build_blank_pdf(num_pages: int = 1) -> bytes:
     from reportlab.pdfgen import canvas
 
     buf = BytesIO()
-    c = canvas.Canvas(buf, pagesize=LETTER)
+    c = canvas.Canvas(buf, pagesize=LETTER, invariant=1)
     for _ in range(num_pages):
         c.showPage()
     c.save()

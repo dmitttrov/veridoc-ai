@@ -9,60 +9,92 @@ import type {
 } from '@veridoc/contracts';
 import { App } from './App';
 
-const documents: DocumentSummary[] = [
-  {
-    id: 'doc-acme-fy2023',
-    title: 'Acme Robotics — Annual Report FY2023 (sample)',
-    issuer: 'Acme Robotics (fictional)',
-    period: 'FY2023',
-    pageCount: 84,
-  },
-];
-
-const stored: StoredDocument[] = [
-  {
-    id: '11111111-1111-1111-1111-111111111111',
-    title: 'acme robotics fy2023',
-    filename: 'acme_robotics_fy2023.pdf',
-    pageCount: 6,
-    chunkCount: 6,
-    sizeBytes: 2048,
-  },
-];
-
-const retrievalResponse: RetrievalResponse = {
-  query: 'revenue',
-  embeddingModel: 'veridoc-deterministic-emb-v1',
-  embeddingDim: 384,
-  passages: [
+const fixtures = vi.hoisted(() => {
+  const docId = '11111111-1111-1111-1111-111111111111';
+  const documents: DocumentSummary[] = [
     {
-      chunkId: '22222222-2222-2222-2222-222222222222',
-      documentId: stored[0]!.id,
-      documentTitle: 'acme robotics fy2023',
-      page: 2,
-      text: 'Total revenue for fiscal year 2023 was 482.6 million dollars.',
-      charStart: 0,
-      charEnd: 60,
-      scores: { lexical: 0.12, semantic: 0.84, fused: 0.0325 },
-      citation: 'acme robotics fy2023, p.2',
+      id: 'doc-acme-fy2023',
+      title: 'Acme Robotics — Annual Report FY2023 (sample)',
+      issuer: 'Acme Robotics (fictional)',
+      period: 'FY2023',
+      pageCount: 84,
     },
-  ],
-};
-
-const streamEvents: ChatStreamEvent[] = [
-  { type: 'token', text: 'Hello ' },
-  { type: 'token', text: 'world.' },
-  { type: 'done', mock: true, model: 'veridoc-mock-0.1', tokenCount: 2 },
-];
+  ];
+  const stored: StoredDocument[] = [
+    {
+      id: docId,
+      title: 'acme robotics fy2023',
+      filename: 'acme_robotics_fy2023.pdf',
+      pageCount: 6,
+      chunkCount: 6,
+      sizeBytes: 2048,
+    },
+  ];
+  const retrievalResponse: RetrievalResponse = {
+    query: 'revenue',
+    embeddingModel: 'veridoc-deterministic-emb-v1',
+    embeddingDim: 384,
+    reranked: false,
+    rerankerModel: null,
+    passages: [
+      {
+        chunkId: '22222222-2222-2222-2222-222222222222',
+        documentId: docId,
+        documentTitle: 'acme robotics fy2023',
+        page: 2,
+        text: 'Total revenue for fiscal year 2023 was 482.6 million dollars.',
+        charStart: 0,
+        charEnd: 60,
+        scores: { lexical: 0.12, semantic: 0.84, fused: 0.0325, rerank: null },
+        citation: 'acme robotics fy2023, p.2',
+      },
+    ],
+  };
+  const ragEvents: ChatStreamEvent[] = [
+    { type: 'token', text: 'Revenue was 482.6 million ' },
+    { type: 'token', text: '[E1].' },
+    {
+      type: 'citations',
+      citations: [
+        {
+          documentId: docId,
+          documentTitle: 'acme robotics fy2023',
+          page: 2,
+          snippet: 'Total revenue for fiscal year 2023 was 482.6 million dollars.',
+          chunkId: '22222222-2222-2222-2222-222222222222',
+          charStart: 0,
+          charEnd: 60,
+          marker: 'E1',
+        },
+      ],
+    },
+    {
+      type: 'done',
+      mock: true,
+      model: 'veridoc-mock-0.1',
+      tokenCount: 2,
+      abstained: false,
+      invalidCitationCount: 0,
+    },
+  ];
+  const chatEvents: ChatStreamEvent[] = [
+    { type: 'token', text: 'Hello ' },
+    { type: 'token', text: 'world.' },
+    { type: 'done', mock: true, model: 'veridoc-mock-0.1', tokenCount: 2 },
+  ];
+  return { documents, stored, retrievalResponse, ragEvents, chatEvents };
+});
 
 vi.mock('./lib/api', () => ({
-  fetchDocuments: vi.fn(async () => documents),
-  fetchStoredDocuments: vi.fn(async () => stored),
+  fetchDocuments: vi.fn(async () => fixtures.documents),
+  fetchStoredDocuments: vi.fn(async () => fixtures.stored),
   uploadDocument: vi.fn(),
-  retrieve: vi.fn(async () => retrievalResponse),
-  // eslint-disable-next-line require-yield
+  retrieve: vi.fn(async () => fixtures.retrievalResponse),
+  streamRag: vi.fn(async function* () {
+    for (const e of fixtures.ragEvents) yield e;
+  }),
   streamChat: vi.fn(async function* () {
-    for (const event of streamEvents) yield event;
+    for (const e of fixtures.chatEvents) yield e;
   }),
 }));
 
@@ -70,20 +102,37 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('App — retrieval view (default)', () => {
-  it('distinguishes retrieved evidence from generated answers', async () => {
-    render(<App />);
-    expect(
-      screen.getByText(/an AI-generated answer or conclusion/i),
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByText('acme robotics fy2023'),
-    ).toBeInTheDocument();
-  });
-
-  it('retrieves and renders source passages with citations', async () => {
+describe('App — grounded RAG (default)', () => {
+  it('streams a verified answer with cited sources and a mock badge', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await screen.findByText('acme robotics fy2023');
+
+    await user.type(screen.getByLabelText('Question'), 'What was revenue?');
+    await user.click(screen.getByRole('button', { name: 'Ask' }));
+
+    expect(await screen.findByText('Generated answer')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/Revenue was 482.6 million/)).toBeInTheDocument(),
+    );
+    expect(screen.getByText('MOCK INFERENCE')).toBeInTheDocument();
+    expect(screen.getByText(/acme robotics fy2023, p\.2/)).toBeInTheDocument();
+  });
+
+  it('distinguishes generated answer from evidence sources', async () => {
+    render(<App />);
+    expect(
+      screen.getByText(/generated by a language model/i),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/not fine-tuned/i).length).toBeGreaterThan(0);
+  });
+});
+
+describe('App — retrieval view', () => {
+  it('shows retrieved evidence passages', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: 'Retrieval' }));
     await screen.findByText('acme robotics fy2023');
 
     await user.type(screen.getByLabelText('Question'), 'What was revenue?');
@@ -92,7 +141,6 @@ describe('App — retrieval view (default)', () => {
     expect(
       await screen.findByText(/Total revenue for fiscal year 2023/),
     ).toBeInTheDocument();
-    expect(screen.getByText('acme robotics fy2023, p.2')).toBeInTheDocument();
   });
 });
 
@@ -100,7 +148,6 @@ describe('App — mock chat view', () => {
   it('streams a mock answer and shows the MOCK MODE badge', async () => {
     const user = userEvent.setup();
     render(<App />);
-
     await user.click(screen.getByRole('tab', { name: 'Mock Chat' }));
     expect(screen.getByText('MOCK MODE')).toBeInTheDocument();
 

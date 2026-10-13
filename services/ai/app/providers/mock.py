@@ -11,6 +11,7 @@ pointing at fixture citations.
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import AsyncIterator
 
 from app.fixtures import citations_for
@@ -21,6 +22,9 @@ from app.models import (
     DoneEvent,
     TokenEvent,
 )
+from app.providers.base import ChatMessage, GenerationResult
+
+_MARKER = re.compile(r"\[(E\d+)\]")
 
 
 def _build_answer(request: ChatRequest) -> str:
@@ -90,4 +94,37 @@ class MockProvider:
             mock=True,
             model=self._model_name,
             token_count=len(tokens),
+        )
+
+    async def generate(
+        self,
+        messages: list[ChatMessage],
+        *,
+        max_tokens: int,
+        temperature: float,
+    ) -> GenerationResult:
+        """Deterministic grounded generation for the RAG path.
+
+        Produces an answer that cites the evidence markers (`[E1]`, ...) present
+        in the user prompt, so the citation-verification pipeline can be fully
+        exercised without a real model. It deliberately ignores any instructions
+        embedded in the evidence (prompt-injection), citing evidence only.
+        """
+        user = next((m.content for m in reversed(messages) if m.role == "user"), "")
+        markers = _MARKER.findall(user)
+        if not markers:
+            # No evidence markers in the prompt -> signal abstention upstream.
+            text = "INSUFFICIENT_EVIDENCE"
+        else:
+            unique = sorted(set(markers), key=lambda m: int(m[1:]))
+            cited = " ".join(f"[{m}]" for m in unique[:2])
+            text = (
+                "[MOCK ANSWER] Based strictly on the retrieved evidence, this is a "
+                f"deterministic placeholder grounded answer {cited}. No real model "
+                "was used and no figures were invented."
+            )
+        return GenerationResult(
+            text=text,
+            model=self._model_name,
+            token_count=len(_tokenize(text)),
         )

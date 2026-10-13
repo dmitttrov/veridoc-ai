@@ -17,7 +17,8 @@ from app.config import get_settings
 from app.db.pool import create_pool
 from app.embeddings import build_embedding_provider
 from app.providers import build_provider
-from app.routers import chat, documents, health, retrieve
+from app.reranking import build_reranker
+from app.routers import chat, documents, health, rag, retrieve
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,6 +34,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.settings = settings
     app.state.provider = build_provider(settings)
     app.state.embedder = build_embedding_provider(settings)
+    app.state.reranker = build_reranker(settings)
 
     # The DB is required for ingestion/retrieval but NOT for the Phase 1 chat
     # mock path. Degrade gracefully if it is unavailable so the mock keeps
@@ -44,12 +46,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:  # noqa: BLE001 - startup must not hard-fail
         logger.warning("database unavailable; ingestion/retrieval disabled (%s)", exc)
 
+    reranker = app.state.reranker
     logger.info(
-        "AI service starting (provider=%s, mock=%s, embedder=%s, dim=%d)",
-        settings.provider,
+        "AI service starting (inference=%s, mock=%s, embedder=%s dim=%d, reranker=%s)",
+        settings.inference_provider,
         settings.is_mock,
         app.state.embedder.model_id,
         app.state.embedder.dim,
+        reranker.model_id if reranker else "none",
     )
     try:
         yield
@@ -81,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router, tags=["chat"])
     app.include_router(documents.router, tags=["documents"])
     app.include_router(retrieve.router, tags=["retrieval"])
+    app.include_router(rag.router, tags=["rag"])
     return app
 
 

@@ -53,18 +53,47 @@ Deferred to Phase 3: cross-encoder reranking.
 
 ---
 
-## Phase 3 (planned) — Reranking + source-grounded generation
+## Phase 3 — Reranking + source-grounded generation ✅ (done)
 
 **Goal:** Add a reranker and the first real generation grounded in retrieved
-passages.
+passages, with verifiable citations.
 
 **Acceptance criteria**
-- [ ] Cross-encoder reranker reorders the fused top-k; evaluation shows the
-      change vs. the Phase 2 hybrid baseline (honestly reported).
-- [ ] `OpenAICompatibleProvider` (local server / vLLM) behind the existing
-      provider seam; mock stays the default/CI backend.
-- [ ] Grounded-or-abstain prompting with prompt-injection mitigations applied to
-      retrieved text (see SECURITY); citations verified against stored spans.
+- [x] Cross-encoder reranker (pluggable; deterministic test reranker; explicit
+      fallback) reorders the RRF top-N → top-k; scores kept distinct from RRF.
+- [x] Evaluation with/without reranking, measured (see EVALUATION.md): MRR@10
+      improves; cross-encoder trades a little Recall@5 — reported honestly.
+- [x] `OpenAICompatibleProvider` (local server / vLLM) behind the provider seam;
+      mock default/CI; never silently falls back; fake-server streaming/failure
+      tests.
+- [x] Grounded RAG: untrusted-evidence framing, abstention, citation
+      verification (fabricated refs rejected), verify-then-stream.
+- [x] Exact vector search for reproducibility (ADR-0016); deterministic fixtures
+      (ADR-0017).
+- [x] Frontend: grounded-answer mode with mock/real badge, cited sources,
+      abstention/error states, evidence-vs-answer distinction; mock chat +
+      retrieval modes preserved.
+- [x] Quality gates pass; Docker Compose build + smoke test.
+
+Not done this phase (no GPU/real inference available): real-model generation
+quality metrics — harness exists and is reproducible; marked NOT RUN.
+
+---
+
+## Phase 4 (planned) — LoRA/QLoRA fine-tuning + evaluation (no publication yet)
+
+**Goal:** Produce a small domain-adapted adapter and measure it honestly against
+the Phase 3 base-model baseline, before any Hugging Face publication.
+
+**Acceptance criteria**
+- [ ] Stand up a local OpenAI-compatible server (e.g. vLLM) and run the Phase 3
+      `--with-generation` eval to establish a **real base-model** baseline.
+- [ ] Reproducible PEFT LoRA/QLoRA training script + dataset with documented
+      provenance (synthetic/public only); weights/datasets never committed.
+- [ ] Before/after evaluation on the same harness (correctness, citation
+      support, abstention); honest reporting incl. regressions.
+- [ ] Draft Hugging Face model card (NOT published) with intended use,
+      limitations, provenance, and methodology.
 
 ---
 

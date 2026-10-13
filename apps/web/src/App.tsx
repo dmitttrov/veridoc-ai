@@ -2,14 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import type { DocumentSummary } from '@veridoc/contracts';
 import { ChatPanel } from './components/ChatPanel';
 import { DocumentList } from './components/DocumentList';
+import { RagView } from './components/RagView';
 import { RetrievalView } from './components/RetrievalView';
 import { useChat } from './hooks/useChat';
 import { fetchDocuments } from './lib/api';
 
-type Mode = 'retrieval' | 'chat';
+type Mode = 'rag' | 'retrieval' | 'chat';
 
 export function App() {
-  const [mode, setMode] = useState<Mode>('retrieval');
+  const [mode, setMode] = useState<Mode>('rag');
 
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -59,11 +60,19 @@ export function App() {
           <div className="mode-switch" role="tablist" aria-label="View mode">
             <button
               role="tab"
+              aria-selected={mode === 'rag'}
+              className={mode === 'rag' ? 'active' : ''}
+              onClick={() => setMode('rag')}
+            >
+              Grounded Answer
+            </button>
+            <button
+              role="tab"
               aria-selected={mode === 'retrieval'}
               className={mode === 'retrieval' ? 'active' : ''}
               onClick={() => setMode('retrieval')}
             >
-              Document Retrieval
+              Retrieval
             </button>
             <button
               role="tab"
@@ -92,9 +101,9 @@ export function App() {
       )}
 
       <main>
-        {mode === 'retrieval' ? (
-          <RetrievalView />
-        ) : (
+        {mode === 'rag' && <RagView />}
+        {mode === 'retrieval' && <RetrievalView />}
+        {mode === 'chat' && (
           <div className="layout">
             <DocumentList
               documents={documents}
@@ -110,9 +119,12 @@ export function App() {
 
       <footer className="app-footer">
         <span>
-          {mode === 'retrieval'
-            ? 'Phase 2 · real PDF ingestion + hybrid retrieval · evidence only, no generated answers.'
-            : 'Phase 1 vertical slice · deterministic mock inference · no real financial data.'}
+          {mode === 'rag' &&
+            'Phase 3 · grounded RAG · hybrid retrieval + reranking + verified citations · model not fine-tuned.'}
+          {mode === 'retrieval' &&
+            'Phase 2 · hybrid retrieval · evidence only, no generated answers.'}
+          {mode === 'chat' &&
+            'Phase 1 · deterministic mock chat · no real financial data.'}
         </span>
       </footer>
     </div>

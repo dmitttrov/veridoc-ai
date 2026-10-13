@@ -62,24 +62,36 @@ Enforced today across the gateway and the AI service (defense in depth):
 - Still assumes uploads are **publicly shareable** and non-sensitive; explicit
   per-user consent UX and antivirus scanning remain future hardening.
 
-## 4. Prompt injection & content risks *(Planned, with MVP groundwork)*
+## 4. Prompt injection & content risks **(implemented — Phase 3)**
 
 Retrieved document text is **untrusted** and may contain adversarial
 instructions ("ignore previous instructions…").
 
-- **Instruction/data separation:** retrieved passages are placed in a clearly
-  delimited data region; the system prompt states that document content is data
-  to be analyzed, never instructions to follow. **[Planned]**
-- **Grounded-or-abstain:** the model must answer only from provided passages and
-  say so when evidence is absent; this both improves faithfulness and limits
-  injection leverage. **[Planned]**
-- **Output is not executed:** answers are rendered as text; no tool-calling or
-  code execution is driven by document content in MVP scope.
-- **Citation verification:** cited spans are checked to exist in the source,
-  reducing fabricated-citation risk. **[Planned]**
-- **MVP groundwork:** the deterministic mock never executes or echoes retrieved
-  instructions, and every streamed event is schema-validated on both ends,
-  preventing malformed payloads from corrupting client state. **[MVP]**
+- **Instruction/data separation:** retrieved passages are assembled into a
+  clearly delimited EVIDENCE region with `[E1]…` markers; the system prompt
+  states the evidence is untrusted data to analyze and that embedded
+  instructions must never be followed. **[Built]**
+- **Grounded-or-abstain:** the model answers only from provided passages and
+  emits a fixed abstention sentinel when evidence is insufficient; empty
+  retrieval abstains without calling the model. **[Built]**
+- **Output is not executed:** answers are rendered as text; document content
+  never drives tool-calling or code execution.
+- **Citation verification:** emitted citation markers are mapped back to the
+  retrieved chunk set; fabricated references are stripped and counted. Valid
+  citations carry a chunk id + character span traceable to stored page text.
+  **Validity is not support** — a valid citation proves the reference exists,
+  not that it substantiates the claim; this is stated in the UI and docs.
+  **[Built]**
+- **Verify-then-stream:** the model response is fully generated and its
+  citations verified before any token is streamed to the client, so unverified
+  or fabricated-citation content is never presented as a final answer. **[Built]**
+- **No secret/content logging:** the inference provider never logs prompts,
+  document content, API keys, or model responses — only coarse status codes.
+  **[Built]**
+- Every streamed event is schema-validated on both ends. **[Built]**
+- Remaining: injection resistance ultimately depends on the chosen model;
+  measured injection resistance is tracked in EVALUATION.md (the mock is trivially
+  resistant; a real model must be re-measured). **[Ongoing]**
 
 ## 5. Document privacy
 

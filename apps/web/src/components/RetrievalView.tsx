@@ -1,5 +1,6 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useRetrieval } from '../hooks/useRetrieval';
+import { DocumentsPanel } from './DocumentsPanel';
 
 export function RetrievalView() {
   const {
@@ -18,13 +19,6 @@ export function RetrievalView() {
   } = useRetrieval();
 
   const [query, setQuery] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = e.target.files?.[0];
-    if (file) void upload(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
 
   const submitQuery = (e: FormEvent): void => {
     e.preventDefault();
@@ -33,67 +27,17 @@ export function RetrievalView() {
 
   return (
     <div className="layout">
-      <section className="panel documents" aria-labelledby="ingest-heading">
-        <h2 id="ingest-heading">Documents</h2>
-
-        <div className="upload">
-          <label className="upload-label">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf"
-              onChange={onFileChange}
-              disabled={uploadStatus === 'uploading'}
-            />
-          </label>
-          {uploadStatus === 'uploading' && (
-            <p role="status" className="hint">
-              Ingesting… parsing, chunking, and embedding.
-            </p>
-          )}
-          {uploadStatus === 'done' && uploadResult && (
-            <p role="status" className="ingest-ok">
-              {uploadResult.alreadyIngested
-                ? `Already ingested (${uploadResult.pageCount} pages, ${uploadResult.chunkCount} chunks).`
-                : `Ingested: ${uploadResult.pageCount} pages, ${uploadResult.chunkCount} chunks.`}
-            </p>
-          )}
-          {uploadStatus === 'error' && (
-            <p role="alert" className="error">
-              {uploadError}
-            </p>
-          )}
-        </div>
-
-        <p className="hint">Select documents to scope retrieval (optional).</p>
-        {storedError && (
-          <p role="alert" className="error">
-            {storedError}
-          </p>
-        )}
-        {stored.length === 0 && !storedError && (
-          <p className="hint">No documents yet — upload a PDF to begin.</p>
-        )}
-        <ul className="document-list">
-          {stored.map((doc) => (
-            <li key={doc.id}>
-              <label className="document-item">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.includes(doc.id)}
-                  onChange={() => toggle(doc.id)}
-                />
-                <span className="document-meta">
-                  <span className="document-title">{doc.title}</span>
-                  <span className="document-sub">
-                    {doc.pageCount} pages · {doc.chunkCount} chunks
-                  </span>
-                </span>
-              </label>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <DocumentsPanel
+        stored={stored}
+        storedError={storedError}
+        selectedIds={selectedIds}
+        onToggle={toggle}
+        uploadStatus={uploadStatus}
+        uploadResult={uploadResult}
+        uploadError={uploadError}
+        onUpload={upload}
+        hint="Select documents to scope retrieval (optional)."
+      />
 
       <section className="panel chat" aria-labelledby="retrieval-heading">
         <h2 id="retrieval-heading">Retrieved evidence</h2>
@@ -131,6 +75,12 @@ export function RetrievalView() {
             <p className="hint">
               {response.passages.length} passage(s) · embedding model{' '}
               <code>{response.embeddingModel}</code>
+              {response.reranked && (
+                <>
+                  {' '}
+                  · reranked by <code>{response.rerankerModel}</code>
+                </>
+              )}
             </p>
             {response.passages.length === 0 && (
               <p className="hint">No matching evidence found in the selected documents.</p>
@@ -148,6 +98,7 @@ export function RetrievalView() {
                   <span className="passage-scores">
                     lex {p.scores.lexical.toFixed(3)} · sem {p.scores.semantic.toFixed(3)} ·
                     fused {p.scores.fused.toFixed(4)}
+                    {p.scores.rerank != null && <> · rerank {p.scores.rerank.toFixed(3)}</>}
                   </span>
                 </header>
                 <blockquote className="passage-text">{p.text}</blockquote>

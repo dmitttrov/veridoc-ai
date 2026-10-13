@@ -21,4 +21,11 @@ async def retrieve(request: Request, body: RetrievalRequest) -> RetrievalRespons
             status_code=503,
             detail={"code": "database_unavailable", "message": "Database is not available."},
         )
-    return await run_retrieve(pool, request.app.state.embedder, body)
+    settings = request.app.state.settings
+    return await run_retrieve(
+        pool,
+        request.app.state.embedder,
+        body,
+        request.app.state.reranker,
+        rerank_candidate_k=settings.rerank_candidate_k,
+    )

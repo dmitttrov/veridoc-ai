@@ -3,6 +3,7 @@ import type {
   ChatStreamEvent,
   DocumentIngestionResult,
   DocumentSummary,
+  RagRequest,
   RetrievalRequest,
   RetrievalResponse,
   StoredDocument,
@@ -40,6 +41,27 @@ export async function* streamChat(
     throw new Error(`Chat request failed (${resp.status})`);
   }
 
+  yield* parseSseStream(resp.body, signal);
+}
+
+/**
+ * Submit a grounded-RAG question. The gateway streams a VERIFIED answer (the AI
+ * service validates citations before emitting), delivered as the same typed SSE
+ * event union as chat (`token` | `citations` | `done` | `error`).
+ */
+export async function* streamRag(
+  request: RagRequest,
+  signal?: AbortSignal,
+): AsyncGenerator<ChatStreamEvent> {
+  const resp = await fetch(`${API_BASE_URL}/api/rag`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify(request),
+    signal,
+  });
+  if (!resp.ok || !resp.body) {
+    throw new Error(`RAG request failed (${resp.status})`);
+  }
   yield* parseSseStream(resp.body, signal);
 }
 

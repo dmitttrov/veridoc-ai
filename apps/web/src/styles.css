@@ -383,6 +383,55 @@ button.secondary {
   font-size: 0.9rem;
 }
 
+.real-badge {
+  background: #064e3b;
+  color: #6ee7b7;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid #6ee7b7;
+}
+
+.rag-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.banner-abstain {
+  background: #1e293b;
+  border: 1px solid var(--warn-fg);
+  color: var(--warn-fg);
+}
+
+.rag-answer {
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.rag-answer-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 0.35rem;
+}
+
+.rag-answer-text {
+  white-space: pre-wrap;
+}
+
+.hint.warn {
+  color: var(--warn-fg);
+}
+
 .app-footer {
   margin-top: 1rem;
   padding-top: 0.75rem;

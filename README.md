@@ -16,13 +16,19 @@ and it handles only publicly shareable, non-sensitive documents. See
 
 ## What works today
 
-- **Document retrieval (Phase 2):** upload a PDF → it is validated, normalized,
-  chunked, embedded, and stored in PostgreSQL + pgvector; ask a question and get
-  hybrid-retrieved source passages (FTS + vector + RRF) with exact text, page,
-  character span, scores, and a traceable citation. Re-ingesting the same PDF is
-  idempotent.
-- **Mock chat (Phase 1):** a React streaming chat over SSE with a deterministic
-  mock provider and inline citations, still available via the view switcher.
+- **Grounded answers (Phase 3):** ask a question and get a language-model answer
+  **grounded in retrieved evidence** with **verified citations** — fabricated
+  citation references are detected and removed, the model is instructed to ignore
+  instructions embedded in documents, and the answer is only streamed after
+  citations are verified. The model is **not fine-tuned**; the default provider
+  is a deterministic mock (real local/vLLM inference is a config change).
+- **Hybrid retrieval + reranking (Phase 2/3):** upload a PDF → validated,
+  normalized, chunked, embedded, stored in PostgreSQL + pgvector; hybrid search
+  (FTS + exact vector + RRF) with optional cross-encoder reranking returns source
+  passages with exact text, page, span, scores, and a traceable citation.
+  Re-ingesting the same PDF is idempotent.
+- **Mock chat (Phase 1):** a React streaming chat over SSE, still available via
+  the view switcher.
 - A NestJS gateway (public edge) that validates requests, enforces upload
   limits, and streams/forwards to the internal FastAPI AI service.
 - Pluggable embeddings: deterministic (default, reproducible) and a real local

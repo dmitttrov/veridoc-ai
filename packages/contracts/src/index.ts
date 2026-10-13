@@ -71,6 +71,16 @@ export const CitationSchema = z.object({
   page: z.number().int().positive(),
   /** Short quoted snippet that supports the answer. */
   snippet: z.string().min(1),
+  /**
+   * Phase 3 (grounded RAG): the retrieved chunk this citation was validated
+   * against, and its character span in the stored, normalized page text. When
+   * present, the citation is traceable to exact stored evidence.
+   */
+  chunkId: z.string().uuid().optional(),
+  charStart: z.number().int().nonnegative().optional(),
+  charEnd: z.number().int().nonnegative().optional(),
+  /** The short evidence marker the model used, e.g. "E1". */
+  marker: z.string().min(1).optional(),
 });
 export type Citation = z.infer<typeof CitationSchema>;
 
@@ -102,6 +112,16 @@ export const ChatStreamEventSchema = z.discriminatedUnion('type', [
     model: z.string().min(1),
     /** Approximate number of generated tokens (coarse, for UX only). */
     tokenCount: z.number().int().nonnegative(),
+    /**
+     * Phase 3 (grounded RAG): true when the system declined to answer because
+     * the retrieved evidence was insufficient.
+     */
+    abstained: z.boolean().optional(),
+    /**
+     * Phase 3: number of citation markers the model emitted that did not map to
+     * any retrieved evidence (fabricated references, which were rejected).
+     */
+    invalidCitationCount: z.number().int().nonnegative().optional(),
   }),
   z.object({
     type: z.literal('error'),
@@ -199,6 +219,11 @@ export const RetrievalRequestSchema = z.object({
   documentIds: z.array(z.string().uuid()).max(50).optional().default([]),
   /** Number of passages to return. */
   topK: z.number().int().positive().max(50).optional().default(5),
+  /**
+   * Override the server's default reranking behaviour. When omitted, the
+   * server applies reranking iff a reranker is configured and available.
+   */
+  rerank: z.boolean().optional(),
 });
 export type RetrievalRequest = z.infer<typeof RetrievalRequestSchema>;
 
@@ -208,8 +233,14 @@ export const RetrievalScoresSchema = z.object({
   lexical: z.number(),
   /** Cosine similarity in [0, 1]; 0 when not matched semantically. */
   semantic: z.number(),
-  /** Reciprocal-rank-fusion score used for the final ordering. */
+  /** Reciprocal-rank-fusion score used for candidate ordering. */
   fused: z.number(),
+  /**
+   * Cross-encoder reranker score. Present only when reranking was applied.
+   * This is a DIFFERENT quantity from `fused` and the two must not be
+   * compared or combined — they live on different scales.
+   */
+  rerank: z.number().nullable().optional(),
 });
 export type RetrievalScores = z.infer<typeof RetrievalScoresSchema>;
 
@@ -233,6 +264,21 @@ export const RetrievedPassageSchema = z.object({
 });
 export type RetrievedPassage = z.infer<typeof RetrievedPassageSchema>;
 
+/* -------------------------------------------------------------------------- */
+/* Grounded RAG (Phase 3)                                                     */
+/* -------------------------------------------------------------------------- */
+
+export const RagRequestSchema = z.object({
+  question: z.string().min(1, 'question must not be empty').max(2000),
+  /** Optional subset of document ids to restrict grounding to. */
+  documentIds: z.array(z.string().uuid()).max(50).optional().default([]),
+  /** Number of evidence passages to ground on. */
+  topK: z.number().int().positive().max(20).optional().default(5),
+  /** Override server default reranking behaviour. */
+  rerank: z.boolean().optional(),
+});
+export type RagRequest = z.infer<typeof RagRequestSchema>;
+
 export const RetrievalResponseSchema = z.object({
   query: z.string(),
   passages: z.array(RetrievedPassageSchema),
@@ -240,5 +286,9 @@ export const RetrievalResponseSchema = z.object({
   embeddingModel: z.string().min(1),
   /** Dimensionality of the embedding vectors. */
   embeddingDim: z.number().int().positive(),
+  /** Whether cross-encoder reranking was applied to produce the final order. */
+  reranked: z.boolean(),
+  /** Identity of the reranker model, when reranking was applied. */
+  rerankerModel: z.string().nullable(),
 });
 export type RetrievalResponse = z.infer<typeof RetrievalResponseSchema>;

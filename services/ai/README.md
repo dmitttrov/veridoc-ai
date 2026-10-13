@@ -16,7 +16,8 @@ where an OpenAI-compatible backend (e.g. a local vLLM server) plugs in later.
 | POST   | `/v1/chat/stream`        | Streaming mock answer (SSE)                  |
 | POST   | `/v1/documents/ingest`   | Ingest an uploaded PDF (multipart)           |
 | GET    | `/v1/documents/stored`   | List ingested documents                      |
-| POST   | `/v1/retrieve`           | Hybrid retrieval → source passages (evidence)|
+| POST   | `/v1/retrieve`           | Hybrid retrieval (+rerank) → source passages |
+| POST   | `/v1/rag/answer`         | Grounded RAG answer with verified citations (SSE) |
 
 ## Phase 2: database, ingestion, retrieval, evaluation
 
