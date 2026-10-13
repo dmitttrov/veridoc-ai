@@ -59,8 +59,10 @@ def parse_number(text: str) -> Decimal | None:
     s = text.strip()
     if not s:
         return None
+    # Strip a leading currency symbol so "$(1,234)" is recognized as negative.
+    s = re.sub(r"^[$€£¥]\s*", "", s).strip()
     negative = False
-    # Accounting negatives: (1,234)
+    # Accounting negatives: (1,234) or $(1,234)
     if s.startswith("(") and s.endswith(")"):
         negative = True
         s = s[1:-1]

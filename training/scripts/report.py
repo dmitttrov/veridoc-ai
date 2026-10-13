@@ -56,9 +56,11 @@ def main() -> None:
     print("{:20s} {:>8s} {:>8s} {:>8s}  paired_bootstrap_ci95 (credible)".format(
         "metric", "base", "adapter", "delta"))
     for k, row in cmp["metrics"].items():
+        if row.get("base") is None and row.get("adapter") is None:
+            continue  # metric not present in these reports
         pb = row.get("paired_bootstrap") or {}
         print("{:20s} {:>8} {:>8} {:>8}  {} {}".format(
-            k, row.get("base"), row.get("adapter"), row.get("delta"),
+            k, str(row.get("base")), str(row.get("adapter")), str(row.get("delta")),
             pb.get("ci95"), pb.get("credible")))
 
     for label, rep in [("BASE", base), ("ADAPTER", adapter)]:

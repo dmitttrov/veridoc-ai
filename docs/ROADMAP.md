@@ -127,8 +127,13 @@ real-filing claim. See `docs/EVALUATION.md`.
       / 4 categories (incl. real restatements).
 - [x] Oracle-eval harness + financial value normalizer (currency / millions /
       billions / parentheses) + citation validity-vs-support scoring; unit-tested.
-- [ ] **Measured base-vs-adapter real eval — BLOCKED** (GPU server unreachable;
-      adapter lives only there). No real numbers claimed. Release decision: **B**.
+- [x] **Measured base-vs-adapter real eval — EXECUTED (Phase 4C.1).** 239 SEC
+      examples; pre-model audit 151/151 XBRL cross-check; adapter credibly
+      improves schema_valid 0.778→1.0, value_exact 0.920→0.980, metric_exact
+      0.801→0.841 (paired bootstrap). Generalizes, not just memorizes. Regression
+      on negative values + abstention gap documented. **Decision: A (experimental).**
+- [ ] Authentic filing-TEXT eval (templated-prose evidence only so far) — blocks
+      a non-experimental release.
 - [ ] End-to-end RAG real-eval (retrieval + extraction) over ingested real docs.
 
 ## Phase 5 (planned) — Run the real eval → decision → (approved) publication

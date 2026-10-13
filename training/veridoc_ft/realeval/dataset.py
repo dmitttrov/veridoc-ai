@@ -18,6 +18,7 @@ import json
 import re
 import urllib.request
 from dataclasses import asdict, dataclass
+from datetime import date
 from pathlib import Path
 
 from veridoc_ft.prompt import marker_for
@@ -83,15 +84,37 @@ def fetch_all(out_raw: Path) -> dict:
     return facts
 
 
+_ANNUAL_FRAME = re.compile(r"^CY\d{4}(Q4I)?$")
+
+
+def _is_annual(x: dict) -> bool:
+    """True only for FULL-YEAR duration facts or FISCAL-YEAR-END instant facts
+    in a 10-K. Critically excludes quarterly facts (e.g. frame CY2008Q2) that a
+    10-K also reports for the same period end — mislabeling those as annual, or
+    as 'restatements', was a real benchmark bug caught in the Phase 4C.1 audit."""
+    if x.get("form") != "10-K" or not x.get("end"):
+        return False
+    frame = x.get("frame")
+    if frame is not None:
+        return bool(_ANNUAL_FRAME.match(frame))
+    # Frameless: keep instants (no start) and ~full-year durations only.
+    start = x.get("start")
+    if not start:
+        return True
+    try:
+        d0 = date.fromisoformat(start)
+        d1 = date.fromisoformat(x["end"])
+    except ValueError:
+        return False
+    return (d1 - d0).days >= 300
+
+
 def _annual_facts(data: dict) -> list[dict]:
     """Annual (10-K) USD facts, one per fiscal-year end, latest filing wins."""
-    rows = [
-        x for x in data.get("units", {}).get("USD", [])
-        if x.get("form") == "10-K" and x.get("start") and x.get("end")
-    ]
     by_period: dict[str, dict] = {}
-    for x in rows:
-        # duration facts (income/cash): ~1yr; instant facts (assets): start==end-ish
+    for x in data.get("units", {}).get("USD", []):
+        if not _is_annual(x):
+            continue
         key = x["end"]
         prev = by_period.get(key)
         if prev is None or x.get("filed", "") > prev.get("filed", ""):
@@ -105,16 +128,24 @@ def _period_label(end: str) -> str:
 
 
 def _as_millions(val: int) -> tuple[str, str]:
-    """(value_string, unit_string) in filing style."""
+    """(value_string, unit_string) in filing style. Negatives use accounting
+    parentheses, e.g. (42,012)."""
     if val % 1_000_000 == 0:
-        return f"{val // 1_000_000:,}", "USD millions"
-    return f"{val:,}", "USD"
+        mag = abs(val) // 1_000_000
+        s = f"({mag:,})" if val < 0 else f"{mag:,}"
+        return s, "USD millions"
+    mag = abs(val)
+    s = f"({mag:,})" if val < 0 else f"{mag:,}"
+    return s, "USD"
+
+
+def _money(vstr: str, unit: str) -> str:
+    return f"${vstr} million" if unit == "USD millions" else f"${vstr}"
 
 
 def _passage(company: str, metric: str, period: str, val: int) -> str:
     vstr, unit = _as_millions(val)
-    money = f"${vstr} million" if unit == "USD millions" else f"${vstr}"
-    return f"For {period}, {company} reported {metric} of {money}."
+    return f"For {period}, {company} reported {metric} of {_money(vstr, unit)}."
 
 
 def _prov(company: str, cik: str, metric: str, fact: dict) -> dict:
@@ -203,29 +234,33 @@ def build_examples(facts: dict) -> list[RealExample]:
                         provenance=_prov(company, cik, metric, fact),
                     ))
 
-            # --- conflicting: same period end, different value across filings ---
-            usd = metrics[metric]["data"].get("units", {}).get("USD", [])
-            tenk = [x for x in usd if x.get("form") == "10-K" and x.get("end")]
+            # --- conflicting: a GENUINE restatement — the SAME full-year fact
+            # reported with different values in DIFFERENT filings (accessions).
+            # Only annual facts are considered, so annual-vs-quarterly pairs from
+            # a single filing are never mistaken for a restatement.
+            annual_usd = [x for x in metrics[metric]["data"].get("units", {}).get("USD", [])
+                          if _is_annual(x)]
             by_end: dict[str, list[dict]] = {}
-            for x in tenk:
+            for x in annual_usd:
                 by_end.setdefault(x["end"], []).append(x)
             for end, group in sorted(by_end.items()):
+                accns = {g.get("accn") for g in group}
                 vals = {int(g["val"]) for g in group}
-                if len(vals) >= 2:
+                # require >=2 distinct filings AND >=2 distinct values
+                if len(accns) >= 2 and len(vals) >= 2:
                     g = sorted(group, key=lambda z: z.get("filed", ""))
                     original, latest = g[0], g[-1]
-                    if int(original["val"]) == int(latest["val"]):
+                    if int(original["val"]) == int(latest["val"]) or \
+                            original.get("accn") == latest.get("accn"):
                         continue
                     period = _period_label(end)
                     ov, ou = _as_millions(int(original["val"]))
                     lv, lu = _as_millions(int(latest["val"]))
                     evid = [
                         f"As originally reported, {company} {metric} for {period} "
-                        f"was ${ov} million." if ou == "USD millions"
-                        else f"As originally reported, {company} {metric} for {period} was ${ov}.",
+                        f"was {_money(ov, ou)}.",
                         f"Restated: {company} {metric} for {period} was revised to "
-                        f"${lv} million, superseding the prior figure." if lu == "USD millions"
-                        else f"Restated: {company} {metric} for {period} was revised to ${lv}.",
+                        f"{_money(lv, lu)}, superseding the prior figure.",
                     ]
                     out.append(RealExample(
                         id=f"{cik}|{metric}|{period}|conflicting",

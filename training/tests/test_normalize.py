@@ -13,9 +13,15 @@ def test_parse_number_variants() -> None:
     assert parse_number("383,285") == Decimal(383285)
     assert parse_number("$1.2 billion") == Decimal(1_200_000_000)
     assert parse_number("(1,234)") == Decimal(-1234)
+    assert parse_number("$(1,234)") == Decimal(-1234)  # currency before parenthesis
     assert parse_number("-500") == Decimal(-500)
     assert parse_number("27%") == Decimal(27)
     assert parse_number("n/a") is None
+
+
+def test_accounting_negative_with_currency_and_unit() -> None:
+    # "$(42,012) million" must equal the raw negative XBRL integer.
+    assert values_match("$(42,012)", "USD millions", "-42012000000", None)
 
 
 def test_to_base_scales_from_value_and_unit() -> None:

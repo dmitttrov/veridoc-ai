@@ -182,36 +182,112 @@ the raw XBRL integer all compare equal. Citation **validity** (marker is a
 provided passage) is scored separately from citation **support** (the cited
 passage actually contains the value).
 
-## Measured base-vs-adapter result: **NOT RUN (blocked)**
+## Phase 4C.1 — executed on the GPU server (measured)
 
-The oracle harness, normalizer, and dataset are complete and unit-tested
-(offline). The measured base-vs-adapter comparison on this real set **was not
-run**: the GPU server that holds the base model **and** adapter-v1 was
-**unreachable** this session (LAN addresses time out; the adapter exists only on
-that server). **No real-world metrics are reported — reporting any would be
-fabrication.**
+Connectivity was restored; artifact integrity re-verified **before** evaluation:
+adapter-v1 SHA-256 `c9a492bd…bb67` (unchanged/immutable), base `Qwen/Qwen3-0.6B`
+@ `c1899de…`, synthetic dataset v1 hashes unchanged, Phase 4B reports preserved.
 
-Reproduce when the server is reachable (identical decoding to Phase 4B):
+**Pre-model benchmark audit** cross-checked every supported gold value against
+the authoritative XBRL fact (by cik + accession + period-end, `fp=FY`,
+form 10-K): **151/151 match**, periods 151/151 consistent, conflicting 24/24
+well-formed, unanswerable evidence genuinely lacks the asked metric. The audit
+caught and fixed two pre-model defects (no model had seen the data): a
+conflation of annual vs. quarterly facts in the "conflicting" generator, and a
+`$(…)` currency+parenthesis negative-parsing gap in the normalizer. The audit
+also **reclassified the evidence honestly**:
+
+| Evidence type | Count |
+| --- | --- |
+| (1) authentic filing excerpt | **0** |
+| (2) XBRL-derived structured | 0 |
+| (3) synthetic / templated prose (real XBRL values) | **239** |
+
+> All 239 evidence passages are **templated prose wrapping authoritative XBRL
+> figures**. This tests generalization to real companies / scales / values /
+> periods / restatements — it does **NOT** test authentic filing *text* (tables,
+> footnotes, prose). **Real filing-text generalization remains untested.**
+
+Frozen benchmark: 239 examples (answerable 88, unanswerable 88, multi_page 39,
+conflicting 24), sha256 `9f9c3495…`. Oracle-evidence mode; greedy decoding
+identical to Phase 4B; same prompt/schema/normalization for base and adapter.
+
+### Measured results (n=239, 1× RTX PRO 6000 Blackwell)
+
+| Metric | Base Qwen3-0.6B | + adapter | Paired Δ (95% CI, bootstrap) |
+| --- | --- | --- | --- |
+| JSON parse success | 1.000 | 1.000 | — |
+| schema_valid | 0.778 | 1.000 | **+0.222 [0.172, 0.276]** |
+| value_exact (n=151) | 0.920 | 0.980 | **+0.060 [0.013, 0.113]** |
+| metric_exact | 0.801 | 0.841 | **+0.040 [0.013, 0.073]** |
+| unit_correct | 1.000 | 1.000 | — |
+| period_correct | 1.000 | 1.000 | — |
+| citation_valid | 1.000 | 1.000 | — |
+| citation_support | 1.000 | 1.000 | — |
+| abstention precision / recall | 1.00 / 0.602 | 1.00 / 0.864 | — |
+| mean latency (greedy) | 1.03 s | 1.16 s | — |
+
+All three headline improvements are credible by **paired bootstrap** on the same
+239 examples (10k resamples; per-example difference CI excludes 0). Base peak
+1.26 GB, adapter 1.31 GB.
+
+### Interpretation — genuine improvements, with honest caveats
+
+Per-category (base → adapter):
+
+- **conflicting** value_exact **14/24 → 24/24**: the base often returns the
+  original figure; the adapter learned to prefer the restated value. Real gain.
+- **unanswerable** schema-valid **35/88 → 88/88** and abstention **53/88 →
+  76/88**: the base emits schema-invalid JSON when abstaining; the adapter
+  abstains cleanly and more often. Real gain.
+- **answerable** value_exact **87/88 → 86/88** and **multi_page** 38/39 → 38/39:
+  essentially flat — the base was already strong here.
+
+This is **generalization, not pure template memorization**: the adapter improves
+on real SEC figures (billions-scale, real companies/periods) it never saw,
+chiefly via schema-format discipline, restatement preference, and cleaner
+abstention.
+
+**Regressions / failures (preserved):**
+
+- **Negative values (regression):** on JPMorgan's negative operating cash flow
+  (`$(42,012) million`), the adapter mangles the value/unit (e.g. `"unit":
+  "$(USD millions…"`) and is **worse than the base** (3/3 such cases wrong). It
+  was trained only on positive synthetic values — sign/parenthesis handling did
+  not transfer. Sign errors are high-impact for financial use.
+- **Abstention gap (12 cases):** the adapter answers instead of abstaining when
+  the asked metric is a near-synonym of the evidence metric ("cash and cash
+  equivalents" vs "net cash from operating activities"), confusing the two.
+- **Evidence realism:** templated prose only — authentic filing-text extraction
+  (tables, footnotes, OCR, messy layout) is **not measured**.
+
+> Do not read these numbers as broad real-world financial competence: they are
+> extraction accuracy on XBRL-derived values in clean templated sentences.
+
+## Release decision: **A — experimental release justified (with documented limits)**
+
+The adapter shows credible, paired improvements over the base on real
+SEC-derived values (schema validity, restatement extraction, abstention) and is
+a small **domain-adapted structured-extraction** adapter — **not** a financial
+reasoning or advice model. Experimental release is justified **only** if the
+model card prominently documents: (a) evaluation was on XBRL-derived values in
+templated prose, so authentic filing-text generalization is **untested**; (b) a
+**regression on negative/parenthesized values**; (c) an abstention gap on
+near-synonym metrics; (d) no real-money/advice use. The remaining blocker for a
+*non-experimental* release is an authentic-filing-text evaluation.
+
+Reproduce:
 
 ```bash
 python -m veridoc_ft.realeval.dataset --out data/realeval --built-at <date>
+python scripts/audit_realeval.py            # pre-model integrity audit
 python -m veridoc_ft.realeval.evaluate --data data/realeval/real_test.jsonl \
-    --out artifacts/real_base.json                         # base
+    --out artifacts/real_base.json                                   # base
 python -m veridoc_ft.realeval.evaluate --data data/realeval/real_test.jsonl \
-    --adapter artifacts/adapter-v1 --out artifacts/real_adapter.json   # adapter
+    --adapter artifacts/adapter-v1 --out artifacts/real_adapter.json  # adapter
 python scripts/report.py --baseline artifacts/real_base.json \
     --adapter artifacts/real_adapter.json --out artifacts/real_comparison.json
 ```
 
-End-to-end **RAG** real-eval (Step 3B) additionally needs the services/ai
-hybrid-retrieval stack over ingested real documents; it is not run here.
-
-## Release decision (interim): **B — requires additional evaluation**
-
-The only measured results for the adapter are on synthetic, templated data it
-fit almost perfectly (train/val loss ≈ 0.0003/0.0014; all synthetic metrics
-1.0) — a strong **template-memorization** signal. With **zero** real-world
-measurement available this session, an experimental release is **not**
-justifiable. Decision: **B (requires the real-world eval above before any
-release)**. This is not a negative result about the adapter — it is the absence
-of the evidence a release requires.
+End-to-end **RAG** real-eval (retrieval + extraction over ingested real
+documents) still needs the services/ai stack and is not run here.

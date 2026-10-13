@@ -100,14 +100,40 @@ items (2/14 → 14/14 schema-valid).
 > performance on real financial filings (tables, footnotes, OCR, messy numerics)
 > and must not be presented as such. Treat as a controlled proof-of-pipeline.
 
-### Real-world evaluation — NOT YET MEASURED
+### Real-world evaluation — MEASURED (Phase 4C.1)
 
-A 122-example **real** benchmark built from SEC EDGAR XBRL (authoritative,
-public-domain) exists and is wired to the same scorer with a financial value
-normalizer (see `docs/EVALUATION.md`, Phase 4C). The base-vs-adapter measurement
-on it **has not been run** (the GPU server was unreachable), so **no real-world
-numbers are claimed**. Do not infer real-filing performance from the synthetic
-table above. **Release status: B — requires the real-world evaluation first.**
+Evaluated on a **239-example** benchmark whose ground truth is authoritative SEC
+EDGAR XBRL (public-domain; exact value/unit/period tied to form + accession).
+**Important:** evidence is **templated prose wrapping real XBRL figures** — there
+are **0 authentic filing excerpts**, so this measures generalization to real
+companies/scales/values/restatements, **not** authentic filing text (tables,
+footnotes, prose). n=239, greedy decoding identical to the base.
+
+| Metric | Base | + adapter | Paired Δ (95% CI) |
+| --- | --- | --- | --- |
+| schema_valid | 0.778 | 1.000 | +0.222 [0.172, 0.276] ✓ |
+| value_exact (n=151) | 0.920 | 0.980 | +0.060 [0.013, 0.113] ✓ |
+| metric_exact | 0.801 | 0.841 | +0.040 [0.013, 0.073] ✓ |
+| abstention recall | 0.602 | 0.864 | — |
+| unit / period / citation valid & support | 1.0 | 1.0 | — |
+
+Credible (paired bootstrap) gains on **real** figures, mainly from: restatement
+extraction (conflicting 14/24 → 24/24), schema-valid abstention (35/88 → 88/88),
+and cleaner abstention. **This is generalization, not pure template memorization.**
+
+**Known regressions / gaps (measured):**
+- **Negative/parenthesized values: regression** — on negative operating cash
+  flow (`$(42,012) million`) the adapter mangles the value and is **worse than
+  base**. It was trained only on positive synthetic values.
+- **Abstention gap** — confuses near-synonym metrics ("cash and cash
+  equivalents" vs "net cash from operating activities") on 12 unanswerable cases.
+- **Authentic filing text: untested.**
+
+**Release status: A — experimental release justified**, as a small
+domain-adapted structured-extraction adapter (NOT a financial reasoning model),
+*provided* the above limitations are shown. See `docs/EVALUATION.md` (Phase 4C.1)
+and `RELEASE_CHECKLIST.md`. Non-experimental release still needs an
+authentic-filing-text evaluation.
 
 ## How to use (adapter loading)
 
