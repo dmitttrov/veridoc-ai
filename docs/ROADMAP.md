@@ -80,20 +80,39 @@ quality metrics — harness exists and is reproducible; marked NOT RUN.
 
 ---
 
-## Phase 4 (planned) — LoRA/QLoRA fine-tuning + evaluation (no publication yet)
+## Phase 4 — LoRA fine-tuning + evaluation infrastructure ✅ (infra done)
 
-**Goal:** Produce a small domain-adapted adapter and measure it honestly against
-the Phase 3 base-model baseline, before any Hugging Face publication.
+**Goal:** Produce a small domain-adapted adapter for structured financial-fact
+extraction and measure it honestly against a base-model baseline, before any
+Hugging Face publication.
 
-**Acceptance criteria**
-- [ ] Stand up a local OpenAI-compatible server (e.g. vLLM) and run the Phase 3
-      `--with-generation` eval to establish a **real base-model** baseline.
-- [ ] Reproducible PEFT LoRA/QLoRA training script + dataset with documented
-      provenance (synthetic/public only); weights/datasets never committed.
-- [ ] Before/after evaluation on the same harness (correctness, citation
-      support, abstention); honest reporting incl. regressions.
-- [ ] Draft Hugging Face model card (NOT published) with intended use,
-      limitations, provenance, and methodology.
+**Done (implemented + CPU-verified)**
+- [x] Base model selected + pinned: `Qwen/Qwen3-0.6B` @ rev `c1899de…` (ADR-0021).
+- [x] Strict Pydantic extraction schema (supported-vs-abstain invariant); prompt
+      with untrusted-evidence framing; no invented values/markers.
+- [x] Reproducible synthetic dataset pipeline (`training/veridoc_ft/dataset.py`):
+      answerable / unanswerable / conflicting / injection; dedup; **family split**
+      (no leakage); versioned + per-split SHA-256. Data git-ignored.
+- [x] LoRA SFT pipeline (PEFT + Transformers Trainer): seeds, pinned revision,
+      grad accumulation, gradient checkpointing, checkpoints/resume, loss curve,
+      GPU-memory reporting; no auto-upload.
+- [x] Baseline + adapter evaluation on the held-out set, identical decoding;
+      JSON/schema/field/evidence/abstention/injection/latency metrics; Wilson CIs
+      for base-vs-adapter comparison.
+- [x] Configurable serving path (base vs adapter vs mock) via the OpenAI-compatible
+      provider; mock preserved.
+- [x] Draft model card, dataset card, release checklist (nothing published).
+- [x] No-network **CPU training smoke test** (tiny random Qwen3) in the suite.
+
+**Conditional on GPU (not run here — no suitable/authorized GPU)**
+- [ ] Real base-model baseline + full LoRA run + adapter benchmark with measured
+      before/after numbers and CIs (exact commands in `training/README.md`).
+
+## Phase 5 (planned) — Production hardening + (approved) publication
+
+Real GPU training run → fill the model card with measured metrics → execute the
+release checklist (adapter-only HF upload) once approved; OpenTelemetry, rate
+limiting, and a containerized vLLM serving path for the adapter.
 
 ---
 

@@ -1,0 +1,12 @@
+# Never commit training data, model weights, adapters, or run artifacts.
+data/
+artifacts/
+*.jsonl
+*.safetensors
+*.bin
+*.gguf
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

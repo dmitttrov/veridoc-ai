@@ -16,6 +16,11 @@ and it handles only publicly shareable, non-sensitive documents. See
 
 ## What works today
 
+- **Fine-tuning pipeline (Phase 4):** a standalone `training/` package with a
+  reproducible synthetic dataset, a strict Pydantic extraction schema, **LoRA**
+  SFT over a pinned `Qwen/Qwen3-0.6B` base, and base-vs-adapter evaluation (with
+  a no-network CPU smoke test). Produces a **LoRA adapter** (not fine-tuned from
+  scratch; nothing published). Draft model card + release checklist included.
 - **Grounded answers (Phase 3):** ask a question and get a language-model answer
   **grounded in retrieved evidence** with **verified citations** — fabricated
   citation references are detected and removed, the model is instructed to ignore
@@ -50,7 +55,8 @@ veridoc-ai/
 │   └── ai/               FastAPI inference service (internal; mock provider)
 ├── packages/
 │   └── contracts/        Shared TypeScript types + zod schemas
-├── infra/                Docker Compose + Dockerfiles (web, api, ai)
+├── training/             Phase 4: LoRA fine-tuning + evaluation (standalone)
+├── infra/                Docker Compose + Dockerfiles (web, api, ai, db)
 ├── docs/                 North Star, Architecture, Roadmap, Decisions,
 │                         Security, Model Strategy
 └── .github/workflows/    CI (lint, type-check, test, build)

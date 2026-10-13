@@ -86,6 +86,31 @@ answer-correctness, support, and abstention metrics with a real model. The RAG
 abstention-on-empty, injection resistance) are covered by DB-backed tests and by
 the mock-provider mechanics run above.
 
+## Phase 4 — fine-tuning (extraction) benchmark status
+
+A separate, reproducible extraction benchmark lives in `training/` (base vs LoRA
+adapter on a held-out, family-split synthetic test set; metrics: JSON parse,
+schema validity, exact metric/value/unit/period, evidence-ref validity,
+abstention precision/recall, injection resistance, latency; Wilson 95% CIs on
+the base-vs-adapter comparison).
+
+**Status: implemented and CPU-smoke-verified; the real benchmark was NOT run to
+completion.** This machine has only a 4 GB Turing GPU with a CPU-only torch and
+no authorization to install CUDA drivers, and CPU inference of the 0.6B base
+model proved impractically slow (a 12-example baseline did not finish in ~8+
+minutes, because the un-tuned base rambles to the token cap). Therefore:
+
+- The dataset builds deterministically (186/60/42 train/val/test; see
+  `data/v1/dataset_card.json`).
+- The LoRA training path is verified by a no-network **CPU smoke test** (tiny
+  randomly-initialized Qwen3 + LoRA + 2 steps + adapter save/reload).
+- **No base-model or adapter quality numbers are reported** — reporting any
+  would be fabrication. The model card's metric tables are explicit TBDs.
+
+To obtain real numbers on a suitable GPU, run the exact commands in
+`training/README.md` (baseline → train → adapter eval → compare). Recommended
+hardware: bf16-capable (Ampere+) GPU, ≥16 GB (or ≥8 GB with QLoRA).
+
 ## Threats to validity
 
 - Small N (15 questions, 16 pages): high variance; not representative of real

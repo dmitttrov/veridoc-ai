@@ -29,23 +29,31 @@ hosted dev endpoint and our self-hosted model, keeping GPU concerns isolated
 behind one seam. The mock remains the CI/default backend so tests never need a
 GPU.
 
-## 3. Candidate base models (to be finalized)
+## 3. Base model — SELECTED (Phase 4): Qwen3-0.6B
 
-Selection criteria: permissive/commercial-friendly license, strong instruction
-following at a **small** size (roughly 1B–8B so it fits modest GPUs with QLoRA),
-good long-context handling for document passages, and active tooling support.
+**Decision:** `Qwen/Qwen3-0.6B`, pinned revision
+`c1899de289a04d12100db370d81485cdf75e47ca`. Recorded as ADR-0021.
 
-Candidate families under consideration (final choice recorded as an ADR once
-license and eval checks pass):
+Verified from the model's Hugging Face page + API:
 
-- Llama 3.x Instruct (8B / smaller variants)
-- Qwen2.5 Instruct (1.5B / 7B)
-- Mistral 7B Instruct
-- Phi-3.x mini/small
+| Property | Value |
+| --- | --- |
+| Model id / revision | `Qwen/Qwen3-0.6B` @ `c1899de289a04d12100db370d81485cdf75e47ca` |
+| License | **Apache-2.0** — permits fine-tuning and redistribution of a LoRA adapter with attribution |
+| Architecture | `Qwen3ForCausalLM`, 28 layers, GQA (16 Q / 8 KV heads), 0.6B params (0.44B non-embedding) |
+| Context length | 32,768 tokens |
+| Tokenizer / chat | Qwen3 tokenizer with instruction chat template; `enable_thinking` toggle (we use `False` for direct JSON) |
+| Tooling | `transformers>=4.51` (we run 4.57.6), PEFT, and vLLM all support Qwen3 |
+| Hardware | tiny: fits CPU for smoke/pilot; a bf16 GPU (Ampere+) with ≥8–16 GB is comfortable for LoRA |
 
-Non-negotiables before selection: confirm the license permits our intended use
-and redistribution of a LoRA adapter, and that the model card allows derivative
-fine-tunes.
+**Why this model:** smallest credible modern instruction model with a permissive
+license and first-class tooling — ideal for a *controlled, reproducible*
+adapter experiment on modest hardware. We do **not** claim it was trained from
+scratch; we fine-tune it with LoRA.
+
+Rejected for the initial experiment (kept as future options): Llama 3.x
+(community license nuances), Qwen2.5, Mistral 7B, Phi-3.x mini — all larger and
+unnecessary for a controlled first adapter.
 
 ## 4. Adapter training approach
 

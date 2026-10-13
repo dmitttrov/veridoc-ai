@@ -303,6 +303,59 @@ misrepresenting citation validity as factual support.
 first-token latency. Context is bounded (top-k passages, per-passage char cap).
 **Status: Accepted.**
 
+## ADR-0021 — Base model: Qwen3-0.6B (pinned revision), LoRA adapter
+
+**Context.** Phase 4 needs a small, permissively licensed instruction model that
+fits modest hardware for a controlled, reproducible fine-tuning experiment.
+
+**Decision.** Use `Qwen/Qwen3-0.6B` pinned at revision
+`c1899de289a04d12100db370d81485cdf75e47ca` (**Apache-2.0**). Produce a **LoRA**
+adapter (PEFT); do not train from scratch and do not redistribute base weights.
+
+**Consequences.** Apache-2.0 permits adapter release with attribution; Qwen3 is
+supported by transformers (≥4.51), PEFT, and vLLM; 0.6B fits CPU for smoke/pilot
+and small GPUs for real runs. The small size bounds expected quality — this is a
+controlled experiment, not a broad-capability claim. **Status: Accepted.**
+
+## ADR-0022 — Extraction task, strict schema, synthetic data, family split
+
+**Context.** We need a fine-tuning task that is useful, measurable, and resistant
+to hallucination, with a dataset that can't leak train→test.
+
+**Decision.**
+- **Task:** structured extraction of one requested financial metric from
+  numbered evidence → strict JSON (`ExtractionResult`, `extra="forbid"`, with a
+  supported-vs-abstain invariant enforced by a validator).
+- **Grounding:** evidence framed as untrusted data; the model cites an evidence
+  marker and must abstain (`supported=false`, nulls) when unsupported; evidence
+  markers are validated against the provided set (no invented references).
+- **Data:** synthetic, fictional, self-authored (CC0-equivalent); categories =
+  answerable, unanswerable/hard-negative, conflicting (restated figures),
+  prompt-injection. Deterministic from a seed; deduped; versioned with per-split
+  SHA-256.
+- **Split:** by `(company, metric)` **family** (hashed), so no template instance
+  appears in two splits — prevents leakage. A held-out test set drives both the
+  base baseline and the adapter eval with identical decoding.
+
+**Consequences.** Reproducible, leakage-controlled evaluation of a narrow,
+verifiable capability. Synthetic data limits external validity (stated in the
+model card). **Status: Accepted.**
+
+## ADR-0023 — Training is a separate package; retrieval stays in services/ai
+
+**Context.** Fine-tuning pulls heavy deps (torch/transformers/peft/datasets/
+accelerate) that must not bloat the runtime AI service or CI.
+
+**Decision.** Put fine-tuning in a standalone `training/` package with its own
+`pyproject.toml` and venv. The trainer core is decoupled from base-model loading
+so a no-network CPU smoke test (tiny random Qwen3) exercises the real LoRA/
+Trainer/save path. Serving keeps using the OpenAI-compatible provider
+(ADR-0019); the adapter is loaded there via a local server, not by importing the
+training package.
+
+**Consequences.** The app and its CI stay lean; training deps are opt-in. Real
+GPU training/eval are explicit commands, not CI steps. **Status: Accepted.**
+
 ## ADR-0009 — Fine-tune via LoRA/QLoRA on an open-weight base *(planned)*
 
 **Context.** We want a domain-adapted model without the cost or honesty problems
