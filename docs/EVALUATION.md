@@ -147,3 +147,71 @@ adapter **39 MB**, final train loss 0.18, val loss 0.0014.
   semantic models; the real cross-encoder row is the more realistic signal.
 - Keyword proxies for correctness/support are coarse and do not capture
   paraphrase or numerical reasoning.
+
+---
+
+# Phase 4C — real-world generalization (SEC EDGAR)
+
+**Goal:** test whether the LoRA adapter generalizes to *real* financial figures
+or merely memorized the synthetic template.
+
+## Real benchmark (built, authoritative)
+
+A 122-example extraction test set was built from the **SEC EDGAR XBRL
+`companyconcept` API** (public-domain US government data) — exact reported
+values, units, and fiscal periods tied to real 10-K filings (form + accession).
+Ground truth is the XBRL fact itself; **no figure was typed from memory and no
+model output is used as ground truth.**
+
+- Companies (6, cross-sector): Apple, Microsoft, JPMorgan Chase, Johnson &
+  Johnson, Walmart, Exxon Mobil.
+- Metrics (8): total revenue, operating income, net income, total assets, total
+  liabilities, cash & equivalents, operating cash flow, stockholders' equity.
+- Categories: answerable 44, unanswerable 44, multi_page 20, conflicting 14
+  (real restatements, e.g. JPMorgan FY2008 operating cash flow $23,098M →
+  restated $23,930M).
+- Build is reproducible: `python -m veridoc_ft.realeval.dataset`. Fixtures stay
+  out of Git (SEC data is public-domain/redistributable, but kept private by
+  default per the brief); the builder + provenance are committed.
+
+Evidence passages state the real figure in filing style (`$391,035 million`,
+`$0.120 billion`, accounting negatives) and the scorer uses a dedicated
+**financial value normalizer** (currency symbols, commas, millions/billions,
+parentheses-negatives) so e.g. "391,035"/"USD millions", "391.035 billion", and
+the raw XBRL integer all compare equal. Citation **validity** (marker is a
+provided passage) is scored separately from citation **support** (the cited
+passage actually contains the value).
+
+## Measured base-vs-adapter result: **NOT RUN (blocked)**
+
+The oracle harness, normalizer, and dataset are complete and unit-tested
+(offline). The measured base-vs-adapter comparison on this real set **was not
+run**: the GPU server that holds the base model **and** adapter-v1 was
+**unreachable** this session (LAN addresses time out; the adapter exists only on
+that server). **No real-world metrics are reported — reporting any would be
+fabrication.**
+
+Reproduce when the server is reachable (identical decoding to Phase 4B):
+
+```bash
+python -m veridoc_ft.realeval.dataset --out data/realeval --built-at <date>
+python -m veridoc_ft.realeval.evaluate --data data/realeval/real_test.jsonl \
+    --out artifacts/real_base.json                         # base
+python -m veridoc_ft.realeval.evaluate --data data/realeval/real_test.jsonl \
+    --adapter artifacts/adapter-v1 --out artifacts/real_adapter.json   # adapter
+python scripts/report.py --baseline artifacts/real_base.json \
+    --adapter artifacts/real_adapter.json --out artifacts/real_comparison.json
+```
+
+End-to-end **RAG** real-eval (Step 3B) additionally needs the services/ai
+hybrid-retrieval stack over ingested real documents; it is not run here.
+
+## Release decision (interim): **B — requires additional evaluation**
+
+The only measured results for the adapter are on synthetic, templated data it
+fit almost perfectly (train/val loss ≈ 0.0003/0.0014; all synthetic metrics
+1.0) — a strong **template-memorization** signal. With **zero** real-world
+measurement available this session, an experimental release is **not**
+justifiable. Decision: **B (requires the real-world eval above before any
+release)**. This is not a negative result about the adapter — it is the absence
+of the evidence a release requires.

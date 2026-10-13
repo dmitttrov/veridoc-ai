@@ -44,10 +44,34 @@ python -c "import json;from veridoc_ft.evaluate import compare;\
 print(json.dumps(compare(json.load(open('artifacts/baseline.json')),json.load(open('artifacts/adapter.json'))),indent=2))"
 ```
 
+## Real-world evaluation (Phase 4C)
+
+A real extraction benchmark is built from **SEC EDGAR XBRL** (authoritative,
+public-domain) — exact values/units/periods tied to real 10-K filings. Ground
+truth is never model-generated or typed from memory.
+
+```bash
+# Build the real test set (fetches SEC XBRL; data/ is git-ignored)
+python -m veridoc_ft.realeval.dataset --out data/realeval --built-at <date>
+
+# Oracle evaluation (correct passage provided; isolates extraction from retrieval)
+python -m veridoc_ft.realeval.evaluate --data data/realeval/real_test.jsonl \
+    --out artifacts/real_base.json                                  # base
+python -m veridoc_ft.realeval.evaluate --data data/realeval/real_test.jsonl \
+    --adapter artifacts/adapter-v1 --out artifacts/real_adapter.json  # adapter
+python scripts/report.py --baseline artifacts/real_base.json \
+    --adapter artifacts/real_adapter.json --out artifacts/real_comparison.json
+```
+
+Value comparison uses `veridoc_ft.realeval.normalize` (currency, commas,
+millions/billions, parentheses-negatives). Citation *validity* and *support* are
+scored separately. See `docs/EVALUATION.md` for status (the measured run is
+pending GPU-server access).
+
 ## Tests
 
 ```bash
-pytest                         # includes a no-network CPU training smoke test
+pytest                         # CPU training smoke + normalizer + real-eval scorer
 ruff check . && mypy veridoc_ft
 ```
 

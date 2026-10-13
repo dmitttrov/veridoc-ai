@@ -120,12 +120,23 @@ services untouched):
 Result is a **credible improvement on synthetic/templated data only** — not a
 real-filing claim. See `docs/EVALUATION.md`.
 
-## Phase 5 (planned) — Real-document eval + (approved) publication
+## Phase 4C — real-world generalization benchmark ✅ (built; eval blocked)
 
-Build a **real financial-document** evaluation set → re-measure base vs adapter
-(expect regression vs the synthetic ceiling) → if justified, execute the release
-checklist (adapter-only HF upload) once approved; plus OpenTelemetry, rate
-limiting, and a containerized vLLM serving path for the adapter.
+- [x] Built a 122-example **real** extraction benchmark from SEC EDGAR XBRL
+      (authoritative, public-domain) across 6 cross-sector companies / 8 metrics
+      / 4 categories (incl. real restatements).
+- [x] Oracle-eval harness + financial value normalizer (currency / millions /
+      billions / parentheses) + citation validity-vs-support scoring; unit-tested.
+- [ ] **Measured base-vs-adapter real eval — BLOCKED** (GPU server unreachable;
+      adapter lives only there). No real numbers claimed. Release decision: **B**.
+- [ ] End-to-end RAG real-eval (retrieval + extraction) over ingested real docs.
+
+## Phase 5 (planned) — Run the real eval → decision → (approved) publication
+
+Run the Phase 4C commands on the GPU server to get measured base-vs-adapter
+real-world numbers → finalize the release decision → if justified, execute the
+release checklist (adapter-only HF upload) once approved; plus OpenTelemetry,
+rate limiting, and a containerized vLLM serving path for the adapter.
 
 ---
 

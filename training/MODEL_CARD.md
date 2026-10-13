@@ -100,6 +100,15 @@ items (2/14 → 14/14 schema-valid).
 > performance on real financial filings (tables, footnotes, OCR, messy numerics)
 > and must not be presented as such. Treat as a controlled proof-of-pipeline.
 
+### Real-world evaluation — NOT YET MEASURED
+
+A 122-example **real** benchmark built from SEC EDGAR XBRL (authoritative,
+public-domain) exists and is wired to the same scorer with a financial value
+normalizer (see `docs/EVALUATION.md`, Phase 4C). The base-vs-adapter measurement
+on it **has not been run** (the GPU server was unreachable), so **no real-world
+numbers are claimed**. Do not infer real-filing performance from the synthetic
+table above. **Release status: B — requires the real-world evaluation first.**
+
 ## How to use (adapter loading)
 
 ```python

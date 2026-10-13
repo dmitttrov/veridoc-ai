@@ -11,9 +11,14 @@ Phase 4B executed the first real GPU run; boxes it satisfied are checked.
       schema_valid, value_exact, metric_exact).
 - [x] Per-category deltas reviewed (gains: conflicting, schema-valid abstention).
 - [x] Latency and peak VRAM recorded (train peak 2.23 GB; infer peak ~1.3 GB).
-- [ ] **BLOCKER: real financial-document evaluation.** Current numbers are on
-      templated synthetic data only and must not be presented as real-filing
-      performance. A real-document eval set is required before release.
+- [~] **BLOCKER: real financial-document evaluation.** A real benchmark now
+      exists (Phase 4C: 122 SEC EDGAR XBRL examples, authoritative ground truth)
+      and the oracle scorer + value normalizer are built and tested — BUT the
+      measured base-vs-adapter run has **not executed** (GPU server unreachable;
+      adapter lives only there). Still blocking until that run produces real
+      numbers. **Interim release decision: B — requires additional evaluation.**
+- [ ] End-to-end RAG real-eval (retrieval + extraction) over ingested real
+      documents (needs the services/ai stack) — not yet run.
 
 ## Model card
 - [x] `MODEL_CARD.md` metric tables filled with **measured** numbers + paired CIs.
