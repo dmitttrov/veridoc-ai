@@ -31,6 +31,26 @@ This is a public, open-source **portfolio** project. See
 > Full methodology and measured numbers: [`docs/EVALUATION.md`](docs/EVALUATION.md)
 > and the model card [`training/MODEL_CARD.md`](training/MODEL_CARD.md).
 
+## Architecture
+
+```
+  Browser (React/TS, Vite)  ──SSE──►  NestJS gateway (public edge: zod, timeouts)
+        │  upload / ask                        │  server-to-server (internal only)
+        ▼                                      ▼
+  Grounded Answer / Retrieval UI      FastAPI AI service
+                                        • PDF ingest (pypdf): normalize → chunk → embed
+                                        • Hybrid retrieval: Postgres FTS + pgvector + RRF
+                                        • Optional cross-encoder reranker
+                                        • Grounded gen: evidence(untrusted)→LLM→verify citations
+                                        • Provider: mock (default) | OpenAI-compatible / vLLM
+                                        │                         │
+                                        ▼                         ▼
+                              PostgreSQL + pgvector     LoRA adapter (Qwen3-0.6B) [training/]
+```
+
+Full details + trade-offs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Case
+study, CV blurb, and a 90-second demo script: [`docs/SHOWCASE.md`](docs/SHOWCASE.md).
+
 ## What works today
 
 - **Fine-tuning pipeline (Phase 4):** a standalone `training/` package with a
@@ -191,6 +211,7 @@ No secrets are committed. Each service documents its environment variables in a
 - [Model Card](training/MODEL_CARD.md) — the LoRA adapter (experimental).
 - [Attributions](docs/ATTRIBUTIONS.md) — third-party licenses & audit.
 - [Release Manifest](docs/RELEASE_MANIFEST.md) · [Publication dry-run](docs/RELEASE_PUBLICATION.md)
+- [Showcase](docs/SHOWCASE.md) — case study, CV blurb, 90-second demo script.
 - [Contributing](CONTRIBUTING.md).
 
 ## Demo
