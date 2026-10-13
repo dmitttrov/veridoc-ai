@@ -1,0 +1,136 @@
+/**
+ * @veridoc/contracts
+ *
+ * Single source of truth for the API contracts shared across the web client,
+ * the NestJS gateway, and (by mirroring in Pydantic) the FastAPI AI service.
+ *
+ * Everything here is runtime-validated with zod so the gateway can reject
+ * malformed input at the boundary, and the inferred TypeScript types are
+ * re-exported for compile-time safety in the web and api workspaces.
+ */
+import { z } from 'zod';
+
+/** Bumped whenever a breaking change is made to the contracts below. */
+export const CONTRACTS_VERSION = '0.1.0' as const;
+
+/* -------------------------------------------------------------------------- */
+/* Documents                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A document available for question answering. In Phase 1 these come from a
+ * static, synthetic fixture set (no real financial documents). Later phases
+ * replace the source with ingested, user-uploaded documents in PostgreSQL.
+ */
+export const DocumentSummarySchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  /** Fictional issuer/company name — fixtures only. */
+  issuer: z.string().min(1),
+  /** Reporting period label, e.g. "FY2023" or "Q2 2024". */
+  period: z.string().min(1),
+  pageCount: z.number().int().positive(),
+});
+export type DocumentSummary = z.infer<typeof DocumentSummarySchema>;
+
+/* -------------------------------------------------------------------------- */
+/* Chat request                                                               */
+/* -------------------------------------------------------------------------- */
+
+export const ChatMessageRole = z.enum(['user', 'assistant']);
+export type ChatMessageRole = z.infer<typeof ChatMessageRole>;
+
+export const ChatMessageSchema = z.object({
+  role: ChatMessageRole,
+  content: z.string().min(1).max(8000),
+});
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
+export const ChatRequestSchema = z.object({
+  /** The new user question. */
+  message: z.string().min(1, 'message must not be empty').max(8000),
+  /** Optional prior turns for multi-turn context. */
+  history: z.array(ChatMessageSchema).max(50).optional().default([]),
+  /** Optional subset of document ids to ground the answer on. */
+  documentIds: z.array(z.string().min(1)).max(50).optional().default([]),
+});
+export type ChatRequest = z.infer<typeof ChatRequestSchema>;
+
+/* -------------------------------------------------------------------------- */
+/* Citations                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A grounded source reference. In mock mode these point at fixture documents
+ * so the end-to-end citation plumbing can be built and tested before real
+ * retrieval exists.
+ */
+export const CitationSchema = z.object({
+  documentId: z.string().min(1),
+  documentTitle: z.string().min(1),
+  page: z.number().int().positive(),
+  /** Short quoted snippet that supports the answer. */
+  snippet: z.string().min(1),
+});
+export type Citation = z.infer<typeof CitationSchema>;
+
+/* -------------------------------------------------------------------------- */
+/* Streaming events (SSE payloads)                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The AI service and the gateway both emit Server-Sent Events whose `data:`
+ * field is a JSON-encoded `ChatStreamEvent`. A stream is a sequence of
+ * `token` events, optionally a `citations` event, then exactly one terminal
+ * event (`done` or `error`).
+ */
+export const ChatStreamEventSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('token'),
+    /** Incremental text delta to append to the answer. */
+    text: z.string(),
+  }),
+  z.object({
+    type: z.literal('citations'),
+    citations: z.array(CitationSchema),
+  }),
+  z.object({
+    type: z.literal('done'),
+    /** Whether the answer was produced by the deterministic mock provider. */
+    mock: z.boolean(),
+    /** Provider/model identifier for observability. */
+    model: z.string().min(1),
+    /** Approximate number of generated tokens (coarse, for UX only). */
+    tokenCount: z.number().int().nonnegative(),
+  }),
+  z.object({
+    type: z.literal('error'),
+    message: z.string().min(1),
+    /** Stable, machine-readable error code. */
+    code: z.string().min(1),
+  }),
+]);
+export type ChatStreamEvent = z.infer<typeof ChatStreamEventSchema>;
+
+export type TokenEvent = Extract<ChatStreamEvent, { type: 'token' }>;
+export type CitationsEvent = Extract<ChatStreamEvent, { type: 'citations' }>;
+export type DoneEvent = Extract<ChatStreamEvent, { type: 'done' }>;
+export type ErrorEvent = Extract<ChatStreamEvent, { type: 'error' }>;
+
+/** Encode an event as a single SSE record terminated by a blank line. */
+export function encodeSseEvent(event: ChatStreamEvent): string {
+  return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Health                                                                     */
+/* -------------------------------------------------------------------------- */
+
+export const HealthStatusSchema = z.object({
+  status: z.enum(['ok', 'degraded']),
+  service: z.string().min(1),
+  version: z.string().min(1),
+  /** True when the service is serving deterministic mock inference. */
+  mock: z.boolean().optional(),
+});
+export type HealthStatus = z.infer<typeof HealthStatusSchema>;

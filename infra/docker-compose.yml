@@ -1,0 +1,69 @@
+# Local development stack for the Phase 1 vertical slice.
+# Runs with no GPU and no paid services.
+#
+# Topology:
+#   web (nginx, static)  ->  published on host :5173
+#   api (NestJS gateway) ->  published on host :3000  (the public edge)
+#   ai  (FastAPI)        ->  INTERNAL ONLY, no host port (see SECURITY.md)
+#
+# PostgreSQL + pgvector is intentionally NOT here yet — it arrives with
+# document ingestion (see docs/ROADMAP.md, Days 2–3).
+
+services:
+  ai:
+    build:
+      context: ..
+      dockerfile: infra/docker/ai.Dockerfile
+    environment:
+      AI_PROVIDER: mock
+      AI_MODEL_NAME: veridoc-mock-0.1
+    # No `ports:` mapping — the AI service is reachable only on the internal
+    # network, by the gateway. Do not expose it to the host or the internet.
+    expose:
+      - "8000"
+    networks:
+      - veridoc
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/docker/api.Dockerfile
+    environment:
+      PORT: "3000"
+      AI_SERVICE_URL: http://ai:8000
+      WEB_ORIGIN: http://localhost:5173
+      AI_REQUEST_TIMEOUT_MS: "30000"
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      ai:
+        condition: service_healthy
+    networks:
+      - veridoc
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:3000
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    networks:
+      - veridoc
+
+networks:
+  veridoc:
+    driver: bridge

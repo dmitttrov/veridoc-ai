@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnp.*
+.yarn/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Builds
+dist/
+build/
+out/
+.vite/
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Project data that must never be committed
+# (uploaded docs, model weights, datasets, generated artifacts)
+data/uploads/
+data/models/
+data/datasets/
+artifacts/
+*.gguf
+*.safetensors
+*.bin
