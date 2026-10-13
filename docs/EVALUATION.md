@@ -291,3 +291,96 @@ python scripts/report.py --baseline artifacts/real_base.json \
 
 End-to-end **RAG** real-eval (retrieval + extraction over ingested real
 documents) still needs the services/ai stack and is not run here.
+
+---
+
+# Phase 4D — adapter-v2 (targeted fixes for v1 weaknesses)
+
+**Goal:** fix adapter-v1's two documented weaknesses — negative/parenthesized
+values and near-synonym metric confusion — without regressions.
+
+adapter-v2 was trained from the **pinned base** (not from v1), same LoRA config
+(r16/α32/dropout0.05, lr 2e-4, 3 epochs, grad-accum 16, bf16), on **dataset v2**
+= v1 synthetic + targeted examples (negatives/losses, parenthesized amounts,
+negative operating cash flow, billions-scale, near-synonym disambiguation +
+abstention, restatements, injection). Dataset v2: train 267 / val 71 / test 46,
+family-split, hashes in `data/v2/dataset_card.json`. Training: 51 steps / 3
+epochs in **137 s**, peak **2.23 GB**, adapter **39 MB**, checksum
+`165518747f28…b58497`. adapter-v1 (`c9a492bd…`) and the base revision are
+unchanged and immutable.
+
+> **INTEGRITY CAVEAT (critical):** v2 was deliberately trained on the exact
+> failure modes the frozen 239-example SEC benchmark probes (negatives,
+> near-synonym abstention). So for v2 that benchmark is a **targeted regression
+> check, NOT an independent generalization test.** v2's near-perfect frozen
+> scores are expected by construction and must not be read as broad
+> generalization. The dev-regression suite below is likewise targeted.
+
+## Development regression suite (dev-only, 12 examples, NOT the frozen benchmark)
+
+Hand-authored, distinct from both v2 training and the frozen benchmark; greedy
+decoding identical for all models.
+
+| Metric | base | adapter-v1 | adapter-v2 |
+| --- | --- | --- | --- |
+| schema_valid | 0.917 | 1.000 | 1.000 |
+| value_exact (n=9) | 0.556 | 0.667 | **1.000** |
+| metric_exact | 1.000 | 1.000 | 1.000 |
+| citation_support | 1.000 | 0.889 | **1.000** |
+| abstention recall (n=3) | 0.333 | 1.000 | 1.000 |
+
+v2 fixes the signed-value misses v1 still had (value_exact 0.667→1.0) and the
+citation-support gap.
+
+## Frozen 239-example SEC benchmark — v2 as a regression check
+
+| Metric | base | adapter-v1 | adapter-v2 |
+| --- | --- | --- | --- |
+| schema_valid | 0.778 | 1.000 | 1.000 |
+| value_exact (n=151) | 0.920 | 0.980 | **1.000** |
+| metric_exact | 0.801 | 0.841 | **1.000** |
+| abstention recall | 0.602 | 0.864 | **1.000** |
+| unit / period / citation valid+support | 1.0 | 1.0 | 1.0 |
+| mean latency (greedy) | 1.03 s | 1.16 s | 1.13 s |
+
+Paired bootstrap (same 239 examples):
+- **base → v2:** schema +0.222 [0.172, 0.276] ✓; value_exact +0.079 [0.040,
+  0.126] ✓; metric_exact +0.199 [0.139, 0.265] ✓ — all credible.
+- **v1 → v2:** metric_exact +0.159 [0.106, 0.219] ✓ credible; value_exact +0.020
+  [0.0, 0.046] — directional only (just 3 negative cases; **not** statistically
+  credible), but **high-impact** (all 3 are sign errors) and with **no regression**.
+
+### Signed-value and abstention regressions (the v1 weaknesses)
+
+- **Signed values:** the 3 JPMorgan negative operating-cash-flow cases
+  (`$(…) million`) went **v1 wrong (0/3) → v2 correct (3/3)**. On the dev suite,
+  all signed/negative/parenthesized cases are correct for v2. **High-impact sign
+  errors fixed.**
+- **Near-synonym abstention:** the 12 "cash and cash equivalents" vs "net cash
+  from operating activities" confusions went **v1 (abstention recall 0.864) → v2
+  (1.000)** on the frozen set; dev abstention perfect.
+- **No regressions:** v2 ≥ v1 on every metric on both sets (v2 even fixed the
+  single answerable value case v1 had regressed on).
+
+## Step 5 — authentic filing-text evaluation: NOT CONSTRUCTED (limitation)
+
+A rigorous evaluation on genuine 10-K/10-Q **prose and tables** (original
+wording, independently verified gold, with licensing noted) was **not built**
+this session. Doing it hastily would risk unreliable gold or paraphrased
+evidence — exactly what the brief forbids ("verify gold independently", "do not
+generate paraphrased evidence with an LLM"). All evaluation to date uses
+authoritative XBRL **values** inside **templated prose**, so authentic
+filing-text generalization for both v1 and v2 **remains untested**. Reported as
+a limitation, not fabricated. This is the primary blocker for a *non*-experimental
+release.
+
+## Release decision: prefer **adapter-v2**; **A — experimental release justified**
+
+v2 reduces the high-impact signed-value errors (3/3 fixed) and the near-synonym
+abstention gap (12/12 fixed) **with no material regressions**, so per the Phase
+4D criterion v2 is preferred over v1 as the experimental candidate. It remains a
+small **domain-adapted structured-extraction** adapter (not a financial
+reasoning model). An *experimental*, clearly-labelled release is justified; a
+*non-experimental* release still requires the authentic-filing-text evaluation
+above. Because v2 targeted the benchmark's failure modes, its scores are a
+regression check, not independent generalization evidence.

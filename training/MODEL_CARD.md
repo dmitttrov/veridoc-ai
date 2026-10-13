@@ -135,6 +135,35 @@ domain-adapted structured-extraction adapter (NOT a financial reasoning model),
 and `RELEASE_CHECKLIST.md`. Non-experimental release still needs an
 authentic-filing-text evaluation.
 
+### Phase 4D — adapter-v2 (PREFERRED experimental candidate)
+
+adapter-v2 (checksum `165518747f28…b58497`, 39 MB) was trained from the pinned
+base (not from v1), same LoRA config, on **dataset v2** (= v1 synthetic +
+targeted examples for negatives/parenthesized values, negative operating cash
+flow, billions-scale, near-synonym metric disambiguation + abstention). It fixes
+adapter-v1's two documented weaknesses **with no regressions**:
+
+| Metric (frozen 239 SEC set) | base | v1 | **v2** |
+| --- | --- | --- | --- |
+| schema_valid | 0.778 | 1.000 | 1.000 |
+| value_exact | 0.920 | 0.980 | **1.000** |
+| metric_exact | 0.801 | 0.841 | **1.000** |
+| abstention recall | 0.602 | 0.864 | **1.000** |
+
+- **Signed values (high-impact):** 3/3 negative-cash-flow cases v1 got wrong are
+  **fixed** by v2; all dev signed/parenthesized cases correct.
+- **Near-synonym abstention:** 12/12 confusions fixed (recall 0.864 → 1.000).
+- **No regressions** vs v1 on either set.
+
+> **INTEGRITY CAVEAT:** v2 was trained on the exact failure modes the frozen set
+> probes, so its near-perfect frozen scores are a **targeted regression check,
+> not independent generalization.** Authentic filing-TEXT evaluation is still
+> **not done** — real-filing generalization remains untested for v1 and v2.
+
+**Recommendation: prefer adapter-v2** for any (clearly-labelled) experimental
+release; v1 is superseded. Non-experimental release still blocked on
+authentic-filing-text evaluation.
+
 ## How to use (adapter loading)
 
 ```python

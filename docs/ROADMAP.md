@@ -136,6 +136,21 @@ real-filing claim. See `docs/EVALUATION.md`.
       a non-experimental release.
 - [ ] End-to-end RAG real-eval (retrieval + extraction) over ingested real docs.
 
+## Phase 4D — adapter-v2: targeted fixes ✅ (done)
+
+- [x] dataset v2 (= v1 + targeted: negatives/parenthesized, negative cash flow,
+      billions, near-synonym disambiguation + abstention); family-split, hashed.
+- [x] dev-only regression suite (12 examples, separate from the frozen benchmark).
+- [x] adapter-v2 trained from the pinned base (same LoRA), 137 s, peak 2.23 GB,
+      checksum `165518747f28…`. v1 kept immutable.
+- [x] base vs v1 vs v2 on dev suite + frozen 239 SEC set; paired bootstrap.
+      v2 fixes signed values (3/3) + near-synonym abstention (12/12), **no
+      regressions**; value_exact 0.980→1.0, metric_exact 0.841→1.0,
+      abstention_recall 0.864→1.0. **Decision: prefer v2 (experimental, A).**
+- [ ] Authentic filing-text eval still NOT done — the remaining release blocker;
+      frozen-set gains for v2 are a targeted regression check, not independent
+      generalization.
+
 ## Phase 5 (planned) — Run the real eval → decision → (approved) publication
 
 Run the Phase 4C commands on the GPU server to get measured base-vs-adapter

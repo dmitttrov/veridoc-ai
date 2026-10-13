@@ -1,10 +1,15 @@
 # Hugging Face Release Checklist (Veridoc Extract LoRA) — NOT YET PUBLISHED
 
 Do not publish until every box is checked and explicitly approved by the owner.
-Phase 4B ran the first GPU training; Phase 4C.1 ran the real-world evaluation
-(decision: **A — experimental release justified**, with documented limits).
-An *experimental*, clearly-labelled adapter release is justified; a
-*non-experimental* release still needs authentic filing-text evaluation.
+Phase 4B ran the first GPU training; 4C.1 ran the real-world evaluation; 4D
+produced **adapter-v2** (preferred) which fixes v1's signed-value and
+near-synonym-abstention weaknesses with no regressions. Decision: **A —
+experimental release justified, candidate = adapter-v2**. An *experimental*,
+clearly-labelled release is justified; a *non-experimental* release still needs
+authentic filing-text evaluation.
+
+Preferred artifact: **adapter-v2** (`165518747f28…b58497`). v1 superseded
+(kept immutable for provenance).
 
 ## Evidence & correctness
 - [x] GPU run completed on 1× RTX PRO 6000 Blackwell; baseline/adapter/comparison

@@ -123,9 +123,11 @@ When quality justifies it and only after explicit approval:
 | Base model selection (ADR) | **Done** — Qwen3-0.6B pinned (ADR-0021) |
 | Dataset + data card | **Done** — synthetic v1, 186/60/42, hashed |
 | Evaluation harness | **Done** (Phase 3–4) |
-| LoRA training | **Done & executed** (Phase 4B, real GPU) |
-| Base-vs-adapter benchmark | **Done** — measured, paired, credible on synthetic set |
-| Hugging Face publication | Not started — requires explicit approval + real-doc eval |
+| LoRA training | **Done** — adapter-v1 (4B) and adapter-v2 (4D), real GPU |
+| Base-vs-adapter benchmark | **Done** — v1 & v2 on synthetic + frozen SEC (4B/4C.1/4D) |
+| adapter-v2 (targeted fixes) | **Done** (4D) — fixes signed values + near-synonym abstention, no regressions; **preferred** |
+| Authentic filing-text eval | **Not done** — blocks non-experimental release |
+| Hugging Face publication | Not started — requires explicit approval + authentic-text eval |
 
 **Phase 4B executed (real GPU):** a LoRA adapter over Qwen3-0.6B was trained and
 evaluated on 1× RTX PRO 6000 Blackwell. On the synthetic held-out set it shows a
