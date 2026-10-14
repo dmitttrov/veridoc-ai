@@ -21,9 +21,9 @@ from app.config import Settings
 from app.db import repository as repo
 from app.embeddings.base import EmbeddingProvider
 from app.ingestion.chunk import chunk_page_text
-from app.ingestion.errors import IngestionError, PdfProcessingTimeout
+from app.ingestion.errors import IngestionError
 from app.ingestion.normalize import normalize_text
-from app.ingestion.pdf import validate_and_extract
+from app.ingestion.sandbox import extract_pdf_sandboxed
 from app.models import DocumentIngestionResult
 
 logger = logging.getLogger("veridoc.ai.ingestion")
@@ -104,19 +104,16 @@ async def ingest_pdf(
             )
 
     try:
-        # Validation + extraction is CPU-bound; bound it with a wall-clock timeout.
-        try:
-            extracted = await asyncio.wait_for(
-                asyncio.to_thread(
-                    validate_and_extract,
-                    data,
-                    max_bytes=settings.max_upload_bytes,
-                    max_pages=settings.max_pages,
-                ),
-                timeout=settings.pdf_parse_timeout_s,
-            )
-        except TimeoutError as exc:
-            raise PdfProcessingTimeout("PDF processing exceeded the time limit.") from exc
+        # Validation + extraction is CPU-bound and runs over UNTRUSTED input, so
+        # it executes in a killable child process under a wall-clock timeout
+        # (a thread could not be terminated and would keep burning CPU). See
+        # app.ingestion.sandbox and docs/SECURITY.md.
+        extracted = await extract_pdf_sandboxed(
+            data,
+            max_bytes=settings.max_upload_bytes,
+            max_pages=settings.max_pages,
+            timeout_s=settings.pdf_parse_timeout_s,
+        )
 
         normalized_pages = [normalize_text(t) for t in extracted.page_texts]
 

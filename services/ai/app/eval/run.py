@@ -277,6 +277,18 @@ async def _main() -> None:
         choices=["none", "deterministic", "cross-encoder"],
         help="second-stage reranker for the with-rerank comparison",
     )
+    parser.add_argument(
+        "--min-recall",
+        type=float,
+        default=None,
+        help="regression gate: exit non-zero if no-rerank Recall@5 is below this floor",
+    )
+    parser.add_argument(
+        "--min-mrr",
+        type=float,
+        default=None,
+        help="regression gate: exit non-zero if no-rerank MRR@10 is below this floor",
+    )
     args = parser.parse_args()
 
     report = await evaluate(
@@ -288,6 +300,17 @@ async def _main() -> None:
         print(json.dumps(report, indent=2))
     else:
         _print_human(report)
+
+    # Deterministic eval, so a floor is a safe regression gate (never flakes).
+    # Checked on the no-rerank RRF baseline (the stable leg).
+    nr = report["retrieval_without_rerank"]
+    failures: list[str] = []
+    if args.min_recall is not None and nr["recall@5"] < args.min_recall:
+        failures.append(f"recall@5 {nr['recall@5']} < floor {args.min_recall}")
+    if args.min_mrr is not None and nr["mrr@10"] < args.min_mrr:
+        failures.append(f"mrr@10 {nr['mrr@10']} < floor {args.min_mrr}")
+    if failures:
+        raise SystemExit("Retrieval regression gate FAILED: " + "; ".join(failures))
 
 
 if __name__ == "__main__":

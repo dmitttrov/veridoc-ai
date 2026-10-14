@@ -90,8 +90,20 @@ describe('rate limiting (e2e)', () => {
 
   it('returns 429 once the per-window limit is exceeded', async () => {
     const server = app.getHttpServer();
-    await request(server).get('/health').expect(200);
-    await request(server).get('/health').expect(200);
-    await request(server).get('/health').expect(429);
+    // /health is intentionally exempt from throttling (SkipThrottle), so drive
+    // the limit through a throttled route. Invalid bodies 400 before the limit
+    // trips; the guard runs ahead of validation, so the 3rd request is 429.
+    await request(server).post('/api/retrieve').send({ query: '' }).expect(400);
+    await request(server).post('/api/retrieve').send({ query: '' }).expect(400);
+    await request(server).post('/api/retrieve').send({ query: '' }).expect(429);
+  });
+
+  it('never throttles the exempt /health liveness probe', async () => {
+    const server = app.getHttpServer();
+    // Exempt requests do not count toward the limit and are never 429'd, even
+    // after the window limit has already been tripped above.
+    for (let i = 0; i < 5; i++) {
+      await request(server).get('/health').expect(200);
+    }
   });
 });

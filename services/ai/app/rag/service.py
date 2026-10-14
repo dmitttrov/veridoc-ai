@@ -8,6 +8,7 @@ not represent validity as support.
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
@@ -20,6 +21,8 @@ from app.providers.base import GenerationResult, InferenceProvider
 from app.rag.prompt import ABSTAIN_SENTINEL, build_messages, marker_for
 from app.reranking.base import Reranker
 from app.retrieval.service import retrieve as run_retrieve
+
+logger = logging.getLogger("veridoc.ai.rag")
 
 _MARKER = re.compile(r"\[(E\d+)\]")
 _SNIPPET_CHARS = 600
@@ -137,6 +140,13 @@ async def answer_question(
     )
 
     raw = result.text.strip()
+    # Defensive cap: bound memory + the token list if a provider ignores
+    # max_tokens and returns a pathologically long answer.
+    if len(raw) > settings.max_answer_chars:
+        logger.warning(
+            "rag answer truncated from %d to %d chars", len(raw), settings.max_answer_chars
+        )
+        raw = raw[: settings.max_answer_chars]
     if ABSTAIN_SENTINEL in raw:
         return RagOutcome(
             answer=(

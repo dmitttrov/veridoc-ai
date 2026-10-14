@@ -13,6 +13,7 @@ import {
   StoredDocumentSchema,
 } from '@veridoc/contracts';
 import { z } from 'zod';
+import { REQUEST_ID_HEADER, getRequestId } from '../common/request-context';
 import { CONFIG, type AppConfig } from '../config';
 
 /** A structured upstream error with a stable code and an HTTP status to mirror. */
@@ -37,6 +38,13 @@ export class AiClient {
 
   constructor(@Inject(CONFIG) private readonly config: AppConfig) {}
 
+  /** Merge the current request's correlation id into outbound headers so the AI
+   * service logs the same id (end-to-end tracing across the hop). */
+  private outboundHeaders(base: Record<string, string> = {}): Record<string, string> {
+    const id = getRequestId();
+    return id ? { ...base, [REQUEST_ID_HEADER]: id } : base;
+  }
+
   /**
    * Validate an upstream JSON payload against the shared contract. The AI
    * service is trusted, but a shape mismatch means a contract drift or a bug —
@@ -53,6 +61,29 @@ export class AiClient {
       );
     }
     return result.data;
+  }
+
+  /**
+   * Probe the AI service's readiness endpoint with a short timeout. Used by the
+   * gateway's own `/ready` probe so an orchestrator sees the gateway as
+   * not-ready when its only upstream cannot serve. Never throws: a failed probe
+   * (timeout, connection refused, 503) resolves to `{ ready: false }`.
+   */
+  async checkReady(): Promise<{ ready: boolean }> {
+    const url = `${this.config.AI_SERVICE_URL}/readyz`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.config.AI_HEALTH_TIMEOUT_MS);
+    try {
+      const resp = await fetch(url, {
+        headers: this.outboundHeaders(),
+        signal: controller.signal,
+      });
+      return { ready: resp.ok };
+    } catch {
+      return { ready: false };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   /** Fetch the list of available (fixture) documents. */
@@ -81,6 +112,7 @@ export class AiClient {
       const resp = await fetch(url, {
         method: 'POST',
         body: form,
+        headers: this.outboundHeaders(),
         signal: controller.signal,
       });
       if (!resp.ok) {
@@ -110,7 +142,7 @@ export class AiClient {
     try {
       const resp = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.outboundHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(body),
         signal: controller.signal,
       });
@@ -130,7 +162,10 @@ export class AiClient {
       this.config.AI_REQUEST_TIMEOUT_MS,
     );
     try {
-      const resp = await fetch(url, { signal: controller.signal });
+      const resp = await fetch(url, {
+        headers: this.outboundHeaders(),
+        signal: controller.signal,
+      });
       if (!resp.ok) {
         throw await this.toUpstreamError(resp, url);
       }
@@ -201,7 +236,10 @@ export class AiClient {
     try {
       const resp = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        headers: this.outboundHeaders({
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+        }),
         body: JSON.stringify(body),
         signal: timeoutController.signal,
       });

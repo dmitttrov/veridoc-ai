@@ -3,7 +3,9 @@
 Reproducible **LoRA** supervised fine-tuning of a small open-weight base model
 for **structured financial-fact extraction from retrieved evidence**. Retrieval
 lives in `services/ai`; this package only produces and evaluates the model
-artifact. **Nothing is uploaded or published.**
+artifact. The experimental **adapter-v2** is published (adapter only) at
+[`dmitttrov/veridoc-extract-qwen3-0.6b-lora`](https://huggingface.co/dmitttrov/veridoc-extract-qwen3-0.6b-lora);
+training data and checkpoints remain **git-ignored** in this repo.
 
 - **Base model:** `Qwen/Qwen3-0.6B` @ revision
   `c1899de289a04d12100db370d81485cdf75e47ca` (Apache-2.0). See
@@ -65,8 +67,10 @@ python scripts/report.py --baseline artifacts/real_base.json \
 
 Value comparison uses `veridoc_ft.realeval.normalize` (currency, commas,
 millions/billions, parentheses-negatives). Citation *validity* and *support* are
-scored separately. See `docs/EVALUATION.md` for status (the measured run is
-pending GPU-server access).
+scored separately. This real-world benchmark has been **executed** on the GPU
+server — see `docs/EVALUATION.md` (Phase 4C.1) for the measured results and the
+integrity caveat on why the frozen-set scores are a targeted regression check,
+not an independent generalization test.
 
 ## Tests
 
@@ -112,6 +116,10 @@ python -m vllm.entrypoints.openai.api_server \
 #   services/ai: AI_INFERENCE_MODEL=veridoc-extract   (select the adapter)
 ```
 
+> The commands above show `adapter-v1` for reproducing the Phase 4C baseline. The
+> **published / preferred** artifact is **adapter-v2** — substitute
+> `artifacts/adapter-v2` to serve the released model.
+
 For local evaluation without a server, `veridoc_ft.infer.load_model(config,
 adapter_path=...)` loads base or base+adapter directly (same decoding), and
 `veridoc_ft.evaluate` validates that generations are schema-conformant.
@@ -119,4 +127,4 @@ adapter_path=...)` loads base or base+adapter directly (same decoding), and
 The **mock** provider remains the default and keeps Phase 1–3 working with no
 model server.
 
-See `MODEL_CARD.md` for the draft Hugging Face card.
+See `MODEL_CARD.md` for the Hugging Face model card.

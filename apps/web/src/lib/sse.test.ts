@@ -37,14 +37,17 @@ describe('parseSseStream', () => {
     expect(events).toEqual([{ type: 'token', text: 'hi' }]);
   });
 
-  it('ignores malformed payloads rather than throwing', async () => {
+  it('surfaces a schema-invalid (contract-drift) event loudly and ends the stream', async () => {
     const events = await collect(
       streamFrom([
         'data: {"type":"token","text":"ok"}\n\n',
         'data: {"type":"unknown"}\n\n',
+        'data: {"type":"token","text":"never"}\n\n',
       ]),
     );
-    expect(events).toEqual([{ type: 'token', text: 'ok' }]);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toEqual({ type: 'token', text: 'ok' });
+    expect(events[1]).toMatchObject({ type: 'error', code: 'contract_violation' });
   });
 
   it('drops a record whose payload is not valid JSON without aborting the stream', async () => {

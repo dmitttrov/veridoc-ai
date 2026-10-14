@@ -4,11 +4,18 @@ import { NestFactory } from '@nestjs/core';
 import { json } from 'express';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { JsonLogger } from './common/json.logger';
 import { loadConfig } from './config';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
+
+  // Structured JSON logs (with request-id correlation) in production; keep the
+  // readable console logger in development.
+  if (config.NODE_ENV === 'production') {
+    app.useLogger(new JsonLogger());
+  }
 
   // Security headers at the edge (CSP, HSTS, no-sniff, frame options, …).
   app.use(helmet());

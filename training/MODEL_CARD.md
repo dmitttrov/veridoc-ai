@@ -1,5 +1,6 @@
-<!-- DRAFT model card — NOT published. Fill the metric tables from a real GPU run
-     before any release. Do not invent numbers. -->
+<!-- Maintainer note: the metric tables below are transcribed from the executed
+     GPU run recorded in docs/EVALUATION.md (Phases 4B–4D), not invented. Keep
+     these tables in sync with docs/EVALUATION.md. -->
 ---
 license: apache-2.0
 base_model: Qwen/Qwen3-0.6B
@@ -12,19 +13,28 @@ library_name: peft
 pipeline_tag: text-generation
 ---
 
-# Veridoc Extract — LoRA adapter for structured financial-fact extraction (DRAFT)
+# Veridoc Extract — LoRA adapter for structured financial-fact extraction
 
-> **Status: draft, not published.** This is a **LoRA adapter** over
-> `Qwen/Qwen3-0.6B`. It is **not** a model trained from scratch and **not** a
-> general financial expert. It targets one narrow task: extracting a single
-> requested financial metric from provided evidence passages, as strict JSON.
+> **Status: experimental.** This is a **LoRA adapter** over `Qwen/Qwen3-0.6B`. It
+> is **not** a model trained from scratch and **not** a general financial expert.
+> It targets one narrow task: extracting a single requested financial metric from
+> provided evidence passages, as strict JSON.
+>
+> **Source & full methodology:**
+> [github.com/dmitttrov/veridoc-ai](https://github.com/dmitttrov/veridoc-ai) ·
+> [`docs/EVALUATION.md`](https://github.com/dmitttrov/veridoc-ai/blob/main/docs/EVALUATION.md)
 
 ## Model details
 
-- **Developed by:** Veridoc AI (portfolio project).
+- **Developed by:** Veridoc AI (open-source research project).
 - **Type:** PEFT/LoRA adapter (rank 16) for causal LM.
+- **Published artifact:** **adapter-v2** (~39 MB safetensors, SHA-256
+  `165518747f28…b58497`). adapter-v1 is superseded — see [Phase 4D](#phase-4d--adapter-v2-preferred-experimental-candidate).
 - **Base model:** [`Qwen/Qwen3-0.6B`](https://huggingface.co/Qwen/Qwen3-0.6B)
   @ `c1899de289a04d12100db370d81485cdf75e47ca`.
+- **Repository / code:**
+  [github.com/dmitttrov/veridoc-ai](https://github.com/dmitttrov/veridoc-ai)
+  (training + evaluation under `training/`).
 - **Language:** English (synthetic financial text).
 - **License:** Apache-2.0 (adapter). Base model Apache-2.0 — attribution to
   Qwen; the base is not redistributed, only the adapter.
@@ -54,10 +64,16 @@ pipeline_tag: text-generation
   completions (JSON targets). Greedy decoding at eval. Deterministic seed=42.
 - **Config:** r=16, α=32, dropout=0.05, targets = Qwen3 attention+MLP
   projections; lr 2e-4, 3 epochs, batch 1 × grad-accum 16, bf16, gradient
-  checkpointing. 186 train / 60 val examples, 36 optimizer steps.
-- **Compute (measured):** 1× NVIDIA RTX PRO 6000 Blackwell (96 GB); training
-  wall-clock **92.9 s**, **peak 2.23 GB** VRAM; adapter **39 MB**. Final train
-  loss 0.18 (curve 1.14→0.0003), validation loss 0.0014. torch 2.11.0+cu128.
+  checkpointing.
+- **adapter-v1:** 186 train / 60 val / 42 test examples, 36 optimizer steps. On
+  1× NVIDIA RTX PRO 6000 Blackwell (96 GB): wall-clock **92.9 s**, **peak
+  2.23 GB** VRAM; adapter **39 MB**. Final train loss 0.18 (curve 1.14→0.0003),
+  validation loss 0.0014. torch 2.11.0+cu128.
+- **adapter-v2 (published):** same config, trained from the same pinned base on
+  **dataset v2** (train 267 / val 71 / test 46 = v1 synthetic + targeted
+  negatives/parenthesized values, negative operating cash flow, billions-scale,
+  near-synonym disambiguation). 51 steps / 3 epochs in **137 s**, peak
+  **2.23 GB**, adapter **39 MB**, checksum `165518747f28…b58497`. See Phase 4D.
 
 ## Data
 
@@ -69,13 +85,18 @@ pipeline_tag: text-generation
 
 ## Evaluation
 
+> **Which adapter?** The two measured tables immediately below are **adapter-v1**
+> (the first release candidate). The **published** artifact is **adapter-v2**,
+> which fixes v1's two documented weaknesses with no regressions — see Phase 4D
+> below.
+
 Held-out test set; identical decoding for base and adapter. Metrics: JSON parse
 success, schema validity, exact metric/value/unit/period, evidence-reference
 validity, abstention precision/recall, injection resistance, latency.
 
 Measured on 1× RTX PRO 6000 Blackwell, greedy decoding, n=42 held-out test.
 
-| Metric | Base (Qwen3-0.6B) | + LoRA adapter | Paired Δ (95% CI) |
+| Metric | Base (Qwen3-0.6B) | + adapter-v1 | Paired Δ (95% CI) |
 | --- | --- | --- | --- |
 | JSON parse success | 1.000 | 1.000 | — |
 | schema_valid | 0.714 | 1.000 | +0.286 [0.167, 0.429] ✓ |
@@ -109,7 +130,7 @@ are **0 authentic filing excerpts**, so this measures generalization to real
 companies/scales/values/restatements, **not** authentic filing text (tables,
 footnotes, prose). n=239, greedy decoding identical to the base.
 
-| Metric | Base | + adapter | Paired Δ (95% CI) |
+| Metric | Base | + adapter-v1 | Paired Δ (95% CI) |
 | --- | --- | --- | --- |
 | schema_valid | 0.778 | 1.000 | +0.222 [0.172, 0.276] ✓ |
 | value_exact (n=151) | 0.920 | 0.980 | +0.060 [0.013, 0.113] ✓ |
@@ -149,8 +170,17 @@ adapter-v1's two documented weaknesses **with no regressions**:
 | metric_exact | 0.801 | 0.841 | **1.000** |
 | abstention recall | 0.602 | 0.864 | **1.000** |
 
+![Base vs adapter-v1 vs adapter-v2 on the frozen 239-example SEC-XBRL benchmark](https://raw.githubusercontent.com/dmitttrov/veridoc-ai/main/docs/assets/veridoc-benchmark.png)
+
+*Frozen 239-example SEC-XBRL benchmark, greedy decoding. v2's near-perfect bars
+are a targeted regression check (see the integrity caveat below), not independent
+generalization; evidence is templated prose wrapping real XBRL values.*
+
 - **Signed values (high-impact):** 3/3 negative-cash-flow cases v1 got wrong are
-  **fixed** by v2; all dev signed/parenthesized cases correct.
+  **fixed** by v2; all dev signed/parenthesized cases correct. (The v1→v2
+  `value_exact` gain of +0.020 [0.0, 0.046] rests on just these 3 cases —
+  **directional, not statistically credible by paired bootstrap** — but
+  high-impact since all 3 are sign errors, and with no regression.)
 - **Near-synonym abstention:** 12/12 confusions fixed (recall 0.864 → 1.000).
 - **No regressions** vs v1 on either set.
 
@@ -170,14 +200,24 @@ from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 base = "Qwen/Qwen3-0.6B"
-rev = "c1899de289a04d12100db370d81485cdf75e47ca"
+rev = "c1899de289a04d12100db370d81485cdf75e47ca"  # pinned base revision
 tok = AutoTokenizer.from_pretrained(base, revision=rev)
 model = AutoModelForCausalLM.from_pretrained(base, revision=rev)
-model = PeftModel.from_pretrained(model, "<org>/veridoc-extract-qwen3-0.6b-lora")
-# Build the prompt with veridoc_ft.prompt.build_messages(question, evidence)
+# This repository hosts adapter-v2 on its default (main) revision:
+model = PeftModel.from_pretrained(model, "dmitttrov/veridoc-extract-qwen3-0.6b-lora")
+model.eval()
 ```
+
+Build the prompt and decode **exactly as in training** — chat template with
+`enable_thinking=False` (direct JSON, no reasoning trace) and greedy decoding.
+The supported one-call path is
+[`veridoc_ft.infer.extract(model, tok, question, evidence, TrainConfig())`](https://github.com/dmitttrov/veridoc-ai/blob/main/training/veridoc_ft/infer.py),
+which wraps
+[`veridoc_ft.prompt.build_messages`](https://github.com/dmitttrov/veridoc-ai/blob/main/training/veridoc_ft/prompt.py)
+and returns the parsed `{metric, value, unit, period, evidence, supported}` object.
 
 ## Reproduction
 
-See `training/README.md` for exact dataset/baseline/train/eval commands. The
-dataset is regenerable from a seed; the base revision is pinned.
+See [`training/README.md`](https://github.com/dmitttrov/veridoc-ai/blob/main/training/README.md)
+for exact dataset/baseline/train/eval commands. The dataset is regenerable from a
+seed; the base revision is pinned.

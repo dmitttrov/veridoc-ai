@@ -1,16 +1,26 @@
 # Veridoc AI inference service (FastAPI). Internal-only; no host port is
 # published for it in docker-compose.
-FROM python:3.11-slim
+#
+# Base image pinned by digest (python:3.11-slim) for reproducible builds.
+FROM python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
-# Install the package and its runtime dependencies.
+# Install runtime dependencies from the hash-pinned lock FIRST — fully pinned
+# and hash-verified for a reproducible image — then the package itself without
+# re-resolving its dependencies. Regenerate the lock with:
+#   uv pip compile pyproject.toml --python-version 3.11 --python-platform linux \
+#     --generate-hashes -o requirements.lock
+COPY services/ai/requirements.lock ./
+RUN pip install --require-hashes -r requirements.lock
+
 COPY services/ai/pyproject.toml ./
 COPY services/ai/app ./app
-RUN pip install --no-cache-dir .
+RUN pip install --no-deps .
 
 # Drop privileges: create and switch to a non-root user (never run as root).
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser /app

@@ -1,6 +1,6 @@
 # Veridoc AI — Security Model
 
-Scope: a public, open-source, portfolio-grade system that answers questions
+Scope: a public, open-source system that answers questions
 over **publicly shareable** financial documents. This document states the trust
 boundaries and the threats we design against. Items are labelled **[MVP]**
 (enforced now) or **[Planned]** (enforced when the relevant feature lands).
@@ -101,7 +101,7 @@ instructions ("ignore previous instructions…").
 - Uploaded documents, model weights, datasets, and generated artifacts are
   git-ignored and never committed. **[MVP]**
 - Multi-tenant isolation and per-user access control are **out of scope** for
-  the portfolio MVP and would require authentication + row-level authorization
+  the MVP and would require authentication + row-level authorization
   before any non-public use. **[Planned / non-goal for MVP]**
 
 ## 6. Transport, CORS, and headers
@@ -116,17 +116,28 @@ instructions ("ignore previous instructions…").
 ## 7. Dependencies & supply chain
 
 - Dependencies are kept minimal. The JS workspaces commit a lockfile
-  (`package-lock.json`); Python dependencies are range-pinned in `pyproject.toml`
-  (no Python lockfile yet) and the base model + its revision are pinned. **[MVP]**
-- CI runs lint, type checks, and tests on every change. Dependency and secret
-  scanning can be layered onto CI during hardening. **[Planned]**
+  (`package-lock.json`); the deployable AI service commits a hash-pinned Python
+  lockfile (`services/ai/requirements.lock` / `requirements-dev.lock`, installed
+  with `pip --require-hashes` in CI and the image). The `training/` package
+  stays range-pinned in `pyproject.toml` — its torch/CUDA dependency matrix is
+  not portably hash-lockable, so exact resolved versions are instead recorded in
+  the run manifest at train time — and the base model + its revision are pinned.
+  All Docker base images are pinned by `@sha256` digest. **[MVP]**
+- CI runs lint, type checks, and tests on every change, builds the container
+  images and scans them with Trivy (fails on HIGH/CRITICAL), and Dependabot
+  tracks npm, pip, and GitHub Actions updates. **[Built]**
 
 ## 8. Denial of service
 
 - The gateway applies upstream timeouts and propagates client disconnects to
-  abort in-flight inference, bounding resource use per request. **[MVP]**
-- Global rate limiting and concurrency caps are a Day 14 hardening item.
-  **[Planned]**
+  abort in-flight inference, bounding resource use per request, and enforces
+  per-IP rate limiting at the edge. **[MVP]**
+- Ingestion is concurrency-capped (excess uploads get 429, not queued); PDF
+  parsing of untrusted input runs in a **killable child process** under a
+  wall-clock timeout so a pathological file cannot pin a CPU, and buffered RAG
+  answers are size-bounded. **[Built]**
+- Global, cross-instance rate limiting / quotas (shared store) remain a
+  hardening item. **[Planned]**
 
 ## 9. Explicit non-goals (MVP)
 
@@ -136,5 +147,5 @@ and deferred; none should be assumed present.
 
 ## 10. Reporting
 
-This is a portfolio project, not a hosted service. Security issues can be raised
+This is a reference project, not a hosted service. Security issues can be raised
 via a GitHub issue (once published) describing the concern and reproduction.

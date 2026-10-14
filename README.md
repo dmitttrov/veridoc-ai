@@ -9,8 +9,11 @@ reranking → grounded, citation-verified generation) plus a reproducible **LoRA
 fine-tuning + evaluation** pipeline for a small financial-fact **extraction**
 adapter over `Qwen/Qwen3-0.6B`. Runs locally with no paid services.
 
-This is a public, open-source **portfolio** project. See
+This is a public, open-source **reference implementation**. See
 [`docs/NORTH_STAR.md`](docs/NORTH_STAR.md).
+
+[![Model on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-veridoc--extract--qwen3--0.6b--lora-yellow)](https://huggingface.co/dmitttrov/veridoc-extract-qwen3-0.6b-lora)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 > ## ⚠️ Experimental model — read before using
 >
@@ -56,7 +59,10 @@ Full details + trade-offs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
   reproducible synthetic dataset, a strict Pydantic extraction schema, **LoRA**
   SFT over a pinned `Qwen/Qwen3-0.6B` base, and base-vs-adapter evaluation (with
   a no-network CPU smoke test). Produces a **LoRA adapter** (not fine-tuned from
-  scratch; nothing published). Draft model card + release checklist included.
+  scratch). The experimental **adapter-v2** is published on Hugging Face —
+  [`dmitttrov/veridoc-extract-qwen3-0.6b-lora`](https://huggingface.co/dmitttrov/veridoc-extract-qwen3-0.6b-lora)
+  (adapter only; the base is never redistributed). Model card and release
+  checklist included.
 - **Grounded answers (Phase 3):** ask a question and get a language-model answer
   **grounded in retrieved evidence** with **verified citations** — fabricated
   citation references are detected and removed, the model is instructed to ignore
@@ -79,6 +85,47 @@ Full details + trade-offs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
   results in [`docs/EVALUATION.md`](docs/EVALUATION.md).
 - Health endpoints, automated tests, lint/type checks, and CI (incl. DB-backed
   integration tests against pgvector).
+
+## Results
+
+Base vs. LoRA adapter on the **frozen 239-example SEC-XBRL benchmark** (greedy
+decoding; ground truth is authoritative SEC EDGAR XBRL). Higher is better.
+
+![Base vs LoRA adapter-v1 vs adapter-v2 on the frozen 239-example SEC-XBRL benchmark](docs/assets/veridoc-benchmark.png)
+
+| Metric (frozen 239-example SEC set) | Base Qwen3-0.6B | adapter-v1 | **adapter-v2** |
+| --- | --- | --- | --- |
+| schema_valid | 0.778 | 1.000 | **1.000** |
+| value_exact (n=151) | 0.920 | 0.980 | **1.000** |
+| metric_exact | 0.801 | 0.841 | **1.000** |
+| abstention recall | 0.602 | 0.864 | **1.000** |
+
+> ⚠️ **This is a targeted regression check, NOT independent generalization.**
+> adapter-v2 was deliberately trained on the exact failure modes this benchmark
+> probes (negative/parenthesized values, near-synonym abstention), so its
+> near-perfect scores are **expected by construction**. The evidence is templated
+> prose wrapping real XBRL values — there are **0 authentic filing excerpts**, so
+> **authentic filing-text generalization remains untested**. Full methodology and
+> paired-bootstrap CIs: [`docs/EVALUATION.md`](docs/EVALUATION.md).
+
+**Spot-check on fresh, held-out companies.** A small qualitative demo
+([`training/scripts/demo_adapter.py`](training/scripts/demo_adapter.py)) compares
+base vs. adapter-v2 on 5 cases — including **two fictional companies never seen in
+training** (Zephyr Mining, Delta Robotics):
+
+| Case | Base | adapter-v2 |
+| --- | --- | --- |
+| Apple FY2024 total revenue (real) | ✅ | ✅ |
+| JPMorgan FY2024 **negative** operating cash flow (real) | ❌ wrong value | ✅ |
+| Walmart near-synonym — must abstain (real) | ❌ answered | ✅ abstains |
+| Zephyr Mining net loss (**fresh, held-out**) | ✅ | ✅ |
+| Delta Robotics near-synonym — must abstain (**fresh, held-out**) | ❌ answered | ✅ abstains |
+| **Score** | **2 / 5** | **5 / 5** |
+
+This is a **qualitative n=5 illustration** that the fix generalizes to unseen
+companies — **not** a statistical benchmark and **not** authentic filing text.
+Full terminal run: [real cases](docs/assets/demo-adapter-1.png) ·
+[fresh held-out cases + score](docs/assets/demo-adapter-2.png).
 
 ## Repository layout
 
@@ -207,7 +254,8 @@ No secrets are committed. Each service documents its environment variables in a
 - [Security](docs/SECURITY.md) — trust boundaries, uploads, prompt injection.
 - [Model Strategy](docs/MODEL_STRATEGY.md) — base models, LoRA/QLoRA, evaluation.
 - [Evaluation](docs/EVALUATION.md) — measured retrieval + base/v1/v2 extraction.
-- [Model Card](training/MODEL_CARD.md) — the LoRA adapter (experimental).
+- [Model Card](training/MODEL_CARD.md) — the LoRA adapter (experimental);
+  published at [🤗 dmitttrov/veridoc-extract-qwen3-0.6b-lora](https://huggingface.co/dmitttrov/veridoc-extract-qwen3-0.6b-lora).
 - [Attributions](docs/ATTRIBUTIONS.md) — third-party licenses & audit.
 - [Contributing](CONTRIBUTING.md).
 
@@ -219,13 +267,16 @@ No hosted demo (nothing is deployed). To try it locally:
   open <http://localhost:5173> — upload a PDF, retrieve evidence, and (mock or
   real inference) get a citation-verified grounded answer. See
   [`infra/README.md`](infra/README.md).
-- **The extraction adapter:** load `Qwen/Qwen3-0.6B` + the LoRA adapter and run a
-  structured extraction — see the loading example in
+- **The extraction adapter:** load `Qwen/Qwen3-0.6B` + the published LoRA adapter
+  ([🤗 `dmitttrov/veridoc-extract-qwen3-0.6b-lora`](https://huggingface.co/dmitttrov/veridoc-extract-qwen3-0.6b-lora))
+  and run a structured extraction — see the loading example in
   [`training/MODEL_CARD.md`](training/MODEL_CARD.md) and commands in
   [`training/README.md`](training/README.md).
 
 ## License
 
 Apache-2.0 (see [`LICENSE`](LICENSE) and [`docs/ATTRIBUTIONS.md`](docs/ATTRIBUTIONS.md)).
-The published Hugging Face artifact is an **adapter only**; the Qwen3-0.6B base
-(Apache-2.0) is downloaded from its original source, not redistributed here.
+The published Hugging Face artifact
+([`dmitttrov/veridoc-extract-qwen3-0.6b-lora`](https://huggingface.co/dmitttrov/veridoc-extract-qwen3-0.6b-lora))
+is an **adapter only**; the Qwen3-0.6B base (Apache-2.0) is downloaded from its
+original source, not redistributed here.

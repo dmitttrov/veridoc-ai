@@ -15,7 +15,8 @@
 
 services:
   db:
-    image: pgvector/pgvector:pg16
+    # Pinned by digest for reproducible builds (pgvector/pgvector:pg16).
+    image: pgvector/pgvector:pg16@sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a
     environment:
       POSTGRES_USER: veridoc
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-veridoc}
@@ -52,15 +53,19 @@ services:
         condition: service_healthy
     networks:
       - veridoc
+    # Gate dependents on READINESS (DB reachable), not liveness: /readyz returns
+    # 503 when the pool is down, so a DB outage marks this container unhealthy
+    # instead of shipping as green. start_period covers DB connect + migrations.
     healthcheck:
       test:
         - CMD
         - python
         - -c
-        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz')"
       interval: 10s
       timeout: 3s
       retries: 5
+      start_period: 30s
 
   api:
     build:

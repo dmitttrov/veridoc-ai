@@ -1,8 +1,14 @@
 # Veridoc AI — Evaluation
 
 Measured retrieval and generation-mechanics results over a **synthetic,
-fictional** corpus. Every number here is produced by the committed, re-runnable
-script `app/eval/run.py` — none is hand-written or estimated.
+fictional** corpus. The **retrieval and generation-mechanics** numbers in this
+document are produced by the committed, re-runnable script `app/eval/run.py` —
+none is hand-written or estimated. The **fine-tuning** numbers (Phase 4, below)
+come from the separate `training/` package (`veridoc_ft.evaluate` +
+`scripts/report.py`); because their input datasets and model artifacts are
+non-redistributable and git-ignored, those figures are **transcribed from the
+recorded GPU run documented inline** (with SHA-256 and hardware provenance), not
+regenerable from this repository alone.
 
 ## Corpus & method
 

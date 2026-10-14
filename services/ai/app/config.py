@@ -65,6 +65,15 @@ class Settings(BaseSettings):
     pdf_parse_timeout_s: float = 30.0
     chunk_size_chars: int = 800
     chunk_overlap_chars: int = 150
+    # Max PDF ingestions processed concurrently. Bounds worst-case memory
+    # (~max_upload_bytes each) and CPU from a burst of uploads; excess requests
+    # are rejected with 429 rather than queued (which would still buffer bodies).
+    max_concurrent_ingestions: int = 2
+
+    # --- Phase 3: generation safety ---------------------------------------
+    # Defensive cap on a buffered RAG answer (characters) before it is tokenized
+    # and streamed, bounding memory if a provider ignores max_tokens.
+    max_answer_chars: int = 24000
 
     @property
     def is_mock(self) -> bool:

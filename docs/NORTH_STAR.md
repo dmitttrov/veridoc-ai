@@ -13,10 +13,8 @@ page citations — so every claim can be checked against its origin.
   from long filings and interim reports without reading every page.
 - **Finance and operations teams** comparing reporting periods (e.g. this year
   vs. last) and reconciling line items.
-- **Engineering interviewers and prospective clients** evaluating the author's
-  ability to build a correct, maintainable, production-oriented AI system.
 
-Veridoc AI is a portfolio and reference project. It is **not** regulated
+Veridoc AI is a reference implementation. It is **not** regulated
 financial advice and must never be used as the sole basis for a financial
 decision.
 

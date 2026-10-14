@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AiUpstreamError } from '../ai/ai.client';
+import { getRequestId } from './request-context';
 
 /** A stable error code to attach when an HttpException carries only a status. */
 function codeForStatus(status: number): string {
@@ -36,6 +37,8 @@ interface ErrorBody {
   code: string;
   message: string;
   issues?: unknown;
+  /** Correlation id so a client can quote it when reporting an error. */
+  requestId?: string;
 }
 
 /**
@@ -87,10 +90,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
     }
 
+    const requestId = getRequestId();
+    if (requestId) body.requestId = requestId;
+
     // Only 5xx are unexpected enough to log; 4xx are normal client errors.
     if (status >= 500) {
       const detail = exception instanceof Error ? exception.message : String(exception);
-      this.logger.error(`${req.method} ${req.originalUrl} -> ${status}: ${detail}`);
+      const tag = requestId ? ` [${requestId}]` : '';
+      this.logger.error(`${req.method} ${req.originalUrl} -> ${status}: ${detail}${tag}`);
     }
 
     res.status(status).json(body);

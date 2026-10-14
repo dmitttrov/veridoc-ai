@@ -1,9 +1,10 @@
-import { Module } from '@nestjs/common';
+import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AiClient } from './ai/ai.client';
 import { ChatController } from './chat/chat.controller';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { requestIdMiddleware } from './common/request-id.middleware';
 import { CONFIG, loadConfig } from './config';
 import { DocumentsController } from './documents/documents.controller';
 import { UploadController } from './documents/upload.controller';
@@ -43,4 +44,9 @@ import { RetrieveController } from './retrieve/retrieve.controller';
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    // Tag every request with a correlation id as early as possible.
+    consumer.apply(requestIdMiddleware).forRoutes('*');
+  }
+}

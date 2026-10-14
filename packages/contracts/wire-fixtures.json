@@ -1,0 +1,133 @@
+{
+  "_comment": "Golden wire-shape fixtures: one representative camelCase instance of every contract model/event. Asserted by BOTH the TypeScript suite (packages/contracts/src/index.test.ts) and the Python suite (services/ai/tests/test_wire_contract.py). This is the single source of truth that keeps the hand-mirrored zod and Pydantic definitions from silently drifting: a renamed/added/removed/retyped field fails one side's round-trip. Every optional field is populated on purpose so the round-trip is exact on both sides.",
+  "documentSummary": {
+    "id": "doc-acme-fy2023",
+    "title": "Acme Robotics FY2023 Annual Report",
+    "issuer": "Acme Robotics (fictional)",
+    "period": "FY2023",
+    "pageCount": 12
+  },
+  "chatMessage": {
+    "role": "user",
+    "content": "What was total revenue?"
+  },
+  "chatRequest": {
+    "message": "What was total revenue for FY2023?",
+    "history": [{ "role": "user", "content": "Hello" }],
+    "documentIds": ["doc-acme-fy2023"]
+  },
+  "citation": {
+    "documentId": "doc-acme-fy2023",
+    "documentTitle": "Acme Robotics FY2023 Annual Report",
+    "page": 7,
+    "snippet": "Total revenue was $12.3M.",
+    "chunkId": "11111111-1111-4111-8111-111111111111",
+    "charStart": 100,
+    "charEnd": 125,
+    "marker": "E1"
+  },
+  "tokenEvent": { "type": "token", "text": "Revenue was " },
+  "citationsEvent": {
+    "type": "citations",
+    "citations": [
+      {
+        "documentId": "doc-acme-fy2023",
+        "documentTitle": "Acme Robotics FY2023 Annual Report",
+        "page": 7,
+        "snippet": "Total revenue was $12.3M.",
+        "chunkId": "11111111-1111-4111-8111-111111111111",
+        "charStart": 100,
+        "charEnd": 125,
+        "marker": "E1"
+      }
+    ]
+  },
+  "doneEvent": {
+    "type": "done",
+    "mock": true,
+    "model": "veridoc-mock-0.1",
+    "tokenCount": 42,
+    "abstained": false,
+    "invalidCitationCount": 0
+  },
+  "errorEvent": {
+    "type": "error",
+    "message": "The AI service is unavailable.",
+    "code": "gateway_upstream_error"
+  },
+  "healthStatus": {
+    "status": "ok",
+    "service": "veridoc-ai",
+    "version": "0.1.0",
+    "mock": true
+  },
+  "documentIngestionResult": {
+    "documentId": "11111111-1111-4111-8111-111111111111",
+    "filename": "acme-fy2023.pdf",
+    "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mimeType": "application/pdf",
+    "sizeBytes": 348201,
+    "pageCount": 12,
+    "chunkCount": 34,
+    "state": "succeeded",
+    "alreadyIngested": false,
+    "error": null
+  },
+  "storedDocument": {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "title": "Acme Robotics FY2023 Annual Report",
+    "filename": "acme-fy2023.pdf",
+    "pageCount": 12,
+    "chunkCount": 34,
+    "sizeBytes": 348201
+  },
+  "retrievalRequest": {
+    "query": "total revenue",
+    "documentIds": ["11111111-1111-4111-8111-111111111111"],
+    "topK": 5,
+    "rerank": true
+  },
+  "retrievalScores": {
+    "lexical": 0.42,
+    "semantic": 0.81,
+    "fused": 0.63,
+    "rerank": 0.95
+  },
+  "retrievedPassage": {
+    "chunkId": "11111111-1111-4111-8111-111111111111",
+    "documentId": "11111111-1111-4111-8111-111111111111",
+    "documentTitle": "Acme Robotics FY2023 Annual Report",
+    "page": 7,
+    "text": "Total revenue was $12.3M in FY2023.",
+    "charStart": 100,
+    "charEnd": 135,
+    "scores": { "lexical": 0.42, "semantic": 0.81, "fused": 0.63, "rerank": 0.95 },
+    "citation": "Acme FY2023, p.7"
+  },
+  "ragRequest": {
+    "question": "What was total revenue for FY2023?",
+    "documentIds": ["11111111-1111-4111-8111-111111111111"],
+    "topK": 5,
+    "rerank": true
+  },
+  "retrievalResponse": {
+    "query": "total revenue",
+    "passages": [
+      {
+        "chunkId": "11111111-1111-4111-8111-111111111111",
+        "documentId": "11111111-1111-4111-8111-111111111111",
+        "documentTitle": "Acme Robotics FY2023 Annual Report",
+        "page": 7,
+        "text": "Total revenue was $12.3M in FY2023.",
+        "charStart": 100,
+        "charEnd": 135,
+        "scores": { "lexical": 0.42, "semantic": 0.81, "fused": 0.63, "rerank": 0.95 },
+        "citation": "Acme FY2023, p.7"
+      }
+    ],
+    "embeddingModel": "veridoc-deterministic-emb-v1",
+    "embeddingDim": 384,
+    "reranked": true,
+    "rerankerModel": "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  }
+}

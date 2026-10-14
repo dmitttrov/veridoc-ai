@@ -1,6 +1,7 @@
 """Document ingestion + stored-document listing (Phase 2)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import asyncpg
@@ -55,6 +56,20 @@ async def ingest(request: Request, file: UploadFile = File(...)) -> DocumentInge
             UnsupportedMediaType(f"Unsupported content type: {content_type or 'unknown'}")
         )
 
+    # Bound concurrency: reject (429) rather than queue when saturated, so a burst
+    # of large uploads cannot buffer unbounded bodies in memory or pin every core.
+    # Safe under asyncio's single-threaded model: no await between the check and
+    # the non-suspending acquire, so the permit is guaranteed available.
+    sem: asyncio.Semaphore = request.app.state.ingest_semaphore
+    if sem.locked():
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "ingestion_busy",
+                "message": "Too many documents are being ingested right now; retry shortly.",
+            },
+        )
+    await sem.acquire()
     try:
         data = await _read_limited(file, settings.max_upload_bytes)
         return await ingest_pdf(
@@ -67,6 +82,8 @@ async def ingest(request: Request, file: UploadFile = File(...)) -> DocumentInge
         )
     except IngestionError as exc:
         raise _ingestion_http(exc) from exc
+    finally:
+        sem.release()
 
 
 @router.get("/v1/documents/stored", response_model=list[StoredDocument])

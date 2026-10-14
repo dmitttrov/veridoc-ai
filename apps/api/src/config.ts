@@ -12,6 +12,8 @@ const EnvSchema = z.object({
   AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
   /** Longer timeout for document ingestion (parsing + embedding). */
   AI_INGEST_TIMEOUT_MS: z.coerce.number().int().positive().default(120000),
+  /** Short timeout (ms) for the gateway's readiness probe of the AI service. */
+  AI_HEALTH_TIMEOUT_MS: z.coerce.number().int().positive().default(2000),
   /** Rate-limit window (ms) and max requests per window per client IP. */
   RATE_LIMIT_TTL_MS: z.coerce.number().int().positive().default(60000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),

@@ -1,8 +1,21 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import {
+  ChatMessageSchema,
   ChatRequestSchema,
   ChatStreamEventSchema,
+  CitationSchema,
+  DocumentIngestionResultSchema,
+  DocumentSummarySchema,
+  HealthStatusSchema,
+  RagRequestSchema,
   RetrievalRequestSchema,
+  RetrievalResponseSchema,
+  RetrievalScoresSchema,
+  RetrievedPassageSchema,
+  StoredDocumentSchema,
   encodeSseEvent,
   type ChatStreamEvent,
 } from './index';
@@ -57,5 +70,46 @@ describe('encodeSseEvent', () => {
   it('produces a well-formed SSE record', () => {
     const record = encodeSseEvent({ type: 'token', text: 'hello' });
     expect(record).toBe('data: {"type":"token","text":"hello"}\n\n');
+  });
+});
+
+/**
+ * Golden wire-shape contract. The same JSON fixtures are validated by the
+ * Python suite (services/ai/tests/test_wire_contract.py). Because the zod and
+ * Pydantic definitions are hand-mirrored, this shared fixture is what actually
+ * prevents silent drift: a field renamed/added/removed/retyped on either side
+ * fails the round-trip in CI.
+ */
+const fixtures = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../wire-fixtures.json', import.meta.url)), 'utf8'),
+) as Record<string, unknown>;
+
+const WIRE_CASES: Array<[string, z.ZodTypeAny]> = [
+  ['documentSummary', DocumentSummarySchema],
+  ['chatMessage', ChatMessageSchema],
+  ['chatRequest', ChatRequestSchema],
+  ['citation', CitationSchema],
+  ['tokenEvent', ChatStreamEventSchema],
+  ['citationsEvent', ChatStreamEventSchema],
+  ['doneEvent', ChatStreamEventSchema],
+  ['errorEvent', ChatStreamEventSchema],
+  ['healthStatus', HealthStatusSchema],
+  ['documentIngestionResult', DocumentIngestionResultSchema],
+  ['storedDocument', StoredDocumentSchema],
+  ['retrievalRequest', RetrievalRequestSchema],
+  ['retrievalScores', RetrievalScoresSchema],
+  ['retrievedPassage', RetrievedPassageSchema],
+  ['ragRequest', RagRequestSchema],
+  ['retrievalResponse', RetrievalResponseSchema],
+];
+
+describe('golden wire-shape fixtures (shared with the Python suite)', () => {
+  it.each(WIRE_CASES)('round-trips %s against its zod schema', (key, schema) => {
+    const instance = fixtures[key];
+    expect(instance, `fixture "${key}" is missing`).toBeDefined();
+    const parsed = schema.parse(instance);
+    // Deep, order-independent equality: fails if the schema would strip a field
+    // (removed on this side) or inject one via a default (optionality drift).
+    expect(parsed).toEqual(instance);
   });
 });

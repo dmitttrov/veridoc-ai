@@ -40,10 +40,12 @@ export function DocumentsPanel({
 
       <div className={styles.upload}>
         <label className={styles['upload-label']}>
+          <span className={styles['upload-cta']}>Upload a PDF</span>
           <input
             ref={fileInputRef}
             type="file"
             accept="application/pdf"
+            aria-label="Upload a PDF document"
             onChange={onFileChange}
             disabled={uploadStatus === 'uploading'}
           />

@@ -1,6 +1,6 @@
 # Contributing to Veridoc AI
 
-Thanks for your interest. Veridoc AI is a portfolio/reference project with a
+Thanks for your interest. Veridoc AI is an open-source reference project with a
 strong emphasis on **correctness, reproducibility, and honest measurement**.
 
 ## Ground rules

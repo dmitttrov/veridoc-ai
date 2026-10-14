@@ -126,8 +126,13 @@ packages/contracts — shared TypeScript types + zod schemas (single source of t
 - Validates the request body against `ChatRequestSchema` (zod) and rejects
   malformed input with HTTP 400 before any upstream call.
 - Opens the upstream SSE stream from the AI service and pipes bytes straight
-  through to the browser (transparent proxy — low overhead, preserves the
-  typed event contract end-to-end).
+  through to the browser (transparent proxy per ADR-0006 — low overhead; the
+  gateway does not re-validate each streamed event). The event shape is
+  guaranteed at the producer (Pydantic) and the consumer (zod); the two
+  hand-mirrored definitions are locked together by a shared golden wire-shape
+  fixture asserted in CI by both the TypeScript and Python suites, and the
+  browser SSE parser surfaces any drift as a loud `error` event instead of
+  silently dropping it.
 - Converts upstream/transport failures into a terminal `error` SSE event so the
   client always sees a well-formed stream.
 
@@ -175,9 +180,9 @@ packages/contracts — shared TypeScript types + zod schemas (single source of t
 | Monorepo | npm workspaces | Built into npm (already present), zero extra tooling | Less powerful than Nx/Turborepo; fine at this size |
 | Gateway | NestJS | Structured DI, testable controllers, first-class SSE/streaming | Heavier than bare Express; justified by growth path |
 | AI service | FastAPI + Pydantic v2 | Idiomatic Python AI stack, async streaming, strict models | Separate runtime from the gateway; the split is deliberate (Python owns ML) |
-| Contracts | zod + inferred types; mirrored Pydantic | Runtime validation at the edge + static safety | Two definitions kept in sync by hand; documented and test-guarded |
+| Contracts | zod + inferred types; mirrored Pydantic | Runtime validation at the edge + static safety | Two definitions kept in sync by hand, locked by a shared golden wire-shape fixture asserted in both the TS and Python suites (CI) |
 | Streaming | Server-Sent Events | One-way token streaming, trivial over HTTP, proxy-friendly | No bidirectional channel (don't need one); WebSocket would be overkill |
-| Gateway→AI | Transparent SSE pipe | Minimal latency/overhead, preserves typed events | Gateway doesn't transform events (acceptable; validation lives at both ends) |
+| Gateway→AI | Transparent SSE pipe | Minimal latency/overhead, forwards typed events verbatim | Gateway doesn't re-validate each event (ADR-0006); validation lives at producer + consumer, cross-checked by the shared fixture |
 | Mock provider | Deterministic templated output | Reproducible tests + demo with no GPU/model/cost | Not representative of real model quality (clearly labelled) |
 | Retrieval store | PostgreSQL + pgvector **(built, Phase 2)** | One store for metadata + lexical + vector; operationally simple | A dedicated vector DB would add ops surface without clear benefit at this scale |
 | PDF parser | pypdf (BSD-3) **(built, Phase 2)** | Permissive license, pure-Python, no system deps | Less layout-aware than PyMuPDF — but PyMuPDF is AGPL (see ADR-0010) |
@@ -196,9 +201,12 @@ packages/contracts — shared TypeScript types + zod schemas (single source of t
   timeout and propagates client disconnects via `AbortController`. Recoverable
   inference failures are delivered as terminal `error` events, not dropped
   connections.
-- **Observability:** structured logs in both services today. OpenTelemetry
-  tracing across the gateway → AI hop is planned (see ROADMAP) and kept in mind
-  by threading a single request through clear boundaries.
+- **Observability:** structured JSON application logs in both services, with a
+  correlation id generated at the gateway and forwarded to the AI service
+  (`x-request-id`) so a single request can be traced across the hop (the id is
+  also echoed to the client and included in gateway error envelopes). Full
+  distributed tracing (OpenTelemetry spans) across the hop is planned (see
+  ROADMAP).
 - **Testing:** unit/contract tests per package (vitest, Jest, pytest) plus an
   end-to-end smoke path exercised during development (documented in the README).
 
