@@ -160,7 +160,7 @@ async def ingest_pdf(
                             normalized_text=page_text,
                         )
                     for (page_number, page_id, idx, start, end, text), vec in zip(
-                        pending_chunks, vectors, strict=False
+                        pending_chunks, vectors, strict=True
                     ):
                         await repo.insert_chunk(
                             conn,

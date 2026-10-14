@@ -182,6 +182,13 @@ the raw XBRL integer all compare equal. Citation **validity** (marker is a
 provided passage) is scored separately from citation **support** (the cited
 passage actually contains the value).
 
+> **Note on counts (122 → 239).** The figures above describe the *first* build
+> of the real set (122 examples). The pre-model audit in Phase 4C.1 (below)
+> regenerated the benchmark after fixing two generator defects, which expanded
+> it to the **frozen 239-example** set used for every measured result in this
+> document. Read "122" as the initial build and "239" as the frozen benchmark;
+> all measured numbers below refer to the 239-example set.
+
 ## Phase 4C.1 — executed on the GPU server (measured)
 
 Connectivity was restored; artifact integrity re-verified **before** evaluation:

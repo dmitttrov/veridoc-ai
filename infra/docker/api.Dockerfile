@@ -15,5 +15,8 @@ ENV NODE_ENV=production
 # symlink to packages/contracts/dist, which we built above).
 COPY --from=build /app ./
 
+# Run as the unprivileged user that ships with the base image (never root).
+USER node
+
 EXPOSE 3000
 CMD ["node", "apps/api/dist/main.js"]

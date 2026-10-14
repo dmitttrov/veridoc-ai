@@ -50,6 +50,14 @@ function parseRecord(record: string): ChatStreamEvent | null {
   const payload = dataLines.join('\n');
   if (payload === '' || payload === '[DONE]') return null;
 
-  const parsed = ChatStreamEventSchema.safeParse(JSON.parse(payload));
+  // A malformed `data:` payload must not abort the whole stream — drop it,
+  // consistent with how schema-invalid records are handled below.
+  let json: unknown;
+  try {
+    json = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  const parsed = ChatStreamEventSchema.safeParse(json);
   return parsed.success ? parsed.data : null;
 }

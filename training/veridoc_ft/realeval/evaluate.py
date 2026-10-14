@@ -38,13 +38,18 @@ def _passage_supports(evidence: list[str], marker: str | None, gold: dict) -> bo
     if not (0 <= idx < len(evidence)):
         return False
     passage = evidence[idx]
-    target = to_base(gold.get("value"), gold.get("unit"))
-    if target is None:
+    if to_base(gold.get("value"), gold.get("unit")) is None:
         return False
-    # Scan numbers in the passage for one matching the gold magnitude.
+    # Scan the passage for a number matching the gold magnitude. Each number is
+    # read with ITS OWN inline scale word (million/billion/…) — not the gold
+    # unit — so support is judged against the figure as written in the passage.
     import re
-    for m in re.findall(r"\$?\(?-?[\d,]+(?:\.\d+)?\)?", passage):
-        if values_match(m, gold.get("unit"), gold.get("value"), gold.get("unit")):
+    num_re = re.compile(
+        r"\$?\(?-?[\d,]+(?:\.\d+)?\)?(?:\s*(?:million|billion|thousand|percent))?",
+        re.IGNORECASE,
+    )
+    for m in num_re.findall(passage):
+        if m.strip() and values_match(m, None, gold.get("value"), gold.get("unit")):
             return True
     return False
 

@@ -48,8 +48,7 @@ This is a public, open-source **portfolio** project. See
                               PostgreSQL + pgvector     LoRA adapter (Qwen3-0.6B) [training/]
 ```
 
-Full details + trade-offs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Case
-study, CV blurb, and a 90-second demo script: [`docs/SHOWCASE.md`](docs/SHOWCASE.md).
+Full details + trade-offs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## What works today
 
@@ -210,8 +209,6 @@ No secrets are committed. Each service documents its environment variables in a
 - [Evaluation](docs/EVALUATION.md) — measured retrieval + base/v1/v2 extraction.
 - [Model Card](training/MODEL_CARD.md) — the LoRA adapter (experimental).
 - [Attributions](docs/ATTRIBUTIONS.md) — third-party licenses & audit.
-- [Release Manifest](docs/RELEASE_MANIFEST.md) · [Publication dry-run](docs/RELEASE_PUBLICATION.md)
-- [Showcase](docs/SHOWCASE.md) — case study, CV blurb, 90-second demo script.
 - [Contributing](CONTRIBUTING.md).
 
 ## Demo

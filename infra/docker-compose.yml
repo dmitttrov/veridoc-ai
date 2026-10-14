@@ -8,13 +8,17 @@
 #   db  (postgres+pgvector) -> INTERNAL ONLY, no host port
 #
 # The AI service runs pending migrations on start, then serves.
+#
+# The DB password defaults to "veridoc" for zero-config local dev. Override it
+# by setting POSTGRES_PASSWORD in the environment (or an infra/.env file) — the
+# DB and the AI service's connection URL both read the same variable.
 
 services:
   db:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: veridoc
-      POSTGRES_PASSWORD: veridoc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-veridoc}
       POSTGRES_DB: veridoc
     # Internal only — no host port published.
     expose:
@@ -36,7 +40,7 @@ services:
     environment:
       AI_INFERENCE_PROVIDER: mock
       AI_MODEL_NAME: veridoc-mock-0.1
-      AI_DATABASE_URL: postgresql://veridoc:veridoc@db:5432/veridoc
+      AI_DATABASE_URL: postgresql://veridoc:${POSTGRES_PASSWORD:-veridoc}@db:5432/veridoc
       AI_EMBEDDING_PROVIDER: deterministic
       AI_RERANKER_PROVIDER: deterministic
     # No `ports:` mapping — the AI service is reachable only on the internal

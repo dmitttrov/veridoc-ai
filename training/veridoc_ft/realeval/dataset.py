@@ -14,6 +14,7 @@ of Git by default (data/ is .gitignored) but are redistributable.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -308,6 +309,13 @@ def build(out_dir: str = "data/realeval", built_at: str = "unknown") -> dict:
         "company_counts": comps,
         "companies": [c[0] for c in COMPANIES],
         "metrics": list(METRICS),
+        # SHA-256 of the written set so a specific run is identifiable. NOTE: the
+        # builder fetches live SEC data ("latest filing wins"), so facts can
+        # drift over time; pin to a recorded hash to reproduce an exact run.
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "accessions": sorted({
+            str(e.provenance["accession"]) for e in examples if e.provenance.get("accession")
+        }),
     }
     (out / "real_card.json").write_text(json.dumps(card, indent=2, sort_keys=True))
     return card

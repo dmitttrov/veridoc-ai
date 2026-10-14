@@ -119,4 +119,4 @@ adapter_path=...)` loads base or base+adapter directly (same decoding), and
 The **mock** provider remains the default and keeps Phase 1–3 working with no
 model server.
 
-See `MODEL_CARD.md` for the draft Hugging Face card and `RELEASE_CHECKLIST.md`.
+See `MODEL_CARD.md` for the draft Hugging Face card.

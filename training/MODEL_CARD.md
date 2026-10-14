@@ -131,9 +131,8 @@ and cleaner abstention. **This is generalization, not pure template memorization
 
 **Release status: A — experimental release justified**, as a small
 domain-adapted structured-extraction adapter (NOT a financial reasoning model),
-*provided* the above limitations are shown. See `docs/EVALUATION.md` (Phase 4C.1)
-and `RELEASE_CHECKLIST.md`. Non-experimental release still needs an
-authentic-filing-text evaluation.
+*provided* the above limitations are shown. See `docs/EVALUATION.md` (Phase 4C.1).
+Non-experimental release still needs an authentic-filing-text evaluation.
 
 ### Phase 4D — adapter-v2 (PREFERRED experimental candidate)
 

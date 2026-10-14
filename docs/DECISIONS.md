@@ -386,7 +386,7 @@ all artifacts (data, checkpoints, adapter) stay out of Git; only measured
 numbers and code enter the repo.
 
 **Consequences.** Publication remains blocked on a real-document evaluation and
-explicit approval (see RELEASE_CHECKLIST.md). **Status: Accepted.**
+explicit owner approval. **Status: Accepted.**
 
 ## ADR-0009 — Fine-tune via LoRA/QLoRA on an open-weight base *(planned)*
 

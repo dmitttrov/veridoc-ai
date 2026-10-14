@@ -47,6 +47,20 @@ describe('parseSseStream', () => {
     expect(events).toEqual([{ type: 'token', text: 'ok' }]);
   });
 
+  it('drops a record whose payload is not valid JSON without aborting the stream', async () => {
+    const events = await collect(
+      streamFrom([
+        'data: {"type":"token","text":"before"}\n\n',
+        'data: {not valid json\n\n',
+        'data: {"type":"token","text":"after"}\n\n',
+      ]),
+    );
+    expect(events).toEqual([
+      { type: 'token', text: 'before' },
+      { type: 'token', text: 'after' },
+    ]);
+  });
+
   it('flushes a trailing record without a blank line', async () => {
     const events = await collect(streamFrom(['data: {"type":"token","text":"tail"}']));
     expect(events).toEqual([{ type: 'token', text: 'tail' }]);

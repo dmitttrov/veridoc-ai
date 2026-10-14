@@ -115,8 +115,9 @@ instructions ("ignore previous instructions…").
 
 ## 7. Dependencies & supply chain
 
-- Dependencies are kept minimal and version-pinned by range; lockfiles are
-  committed. **[MVP]**
+- Dependencies are kept minimal. The JS workspaces commit a lockfile
+  (`package-lock.json`); Python dependencies are range-pinned in `pyproject.toml`
+  (no Python lockfile yet) and the base model + its revision are pinned. **[MVP]**
 - CI runs lint, type checks, and tests on every change. Dependency and secret
   scanning can be layered onto CI during hardening. **[Planned]**
 

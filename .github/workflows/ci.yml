@@ -75,3 +75,27 @@ jobs:
         env:
           AI_DATABASE_URL: postgresql://veridoc:veridoc@localhost:5432/veridoc
           AI_EMBEDDING_PROVIDER: deterministic
+
+  training:
+    name: Python (training / fine-tuning)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: training
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      # CPU-only torch keeps CI light; the LoRA smoke test uses a tiny random model.
+      - name: Install (CPU torch + dev extras)
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev]"
+      - name: Lint (ruff)
+        run: ruff check .
+      - name: Type-check (mypy)
+        run: mypy veridoc_ft
+      - name: Test (pytest, incl. CPU LoRA smoke test)
+        run: pytest

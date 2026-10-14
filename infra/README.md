@@ -1,8 +1,8 @@
 # Infrastructure (local development)
 
-Phase 1 ships a minimal Docker Compose stack: **web**, **api**, **ai**. No GPU,
-no paid services, no database yet (PostgreSQL + pgvector arrives with ingestion
-— see `docs/ROADMAP.md`).
+A local Docker Compose stack: **web**, **api**, **ai**, and **db** (PostgreSQL +
+pgvector). No GPU and no paid services required. The `ai` service applies
+database migrations on startup.
 
 ## Run the stack
 
@@ -19,9 +19,10 @@ Then open <http://localhost:5173>.
 | web     | 5173 → 80 | Static React app served by nginx |
 | api     | 3000      | NestJS gateway (the public edge)  |
 | ai      | *(none)*  | **Internal only** — intentionally not published |
+| db      | *(none)*  | **Internal only** — PostgreSQL + pgvector |
 
-The AI service has no published host port: it is reachable only by the gateway
-on the internal `veridoc` network. See `docs/SECURITY.md`.
+The AI service and database have no published host ports: they are reachable
+only on the internal `veridoc` network. See `docs/SECURITY.md`.
 
 ## Configuration
 
