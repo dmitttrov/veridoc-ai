@@ -1,6 +1,18 @@
-import { BadRequestException, Body, Controller, Logger, Post, Req, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Logger,
+  Post,
+  Req,
+  Res,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { RagRequestSchema, encodeSseEvent, type ChatStreamEvent } from '@veridoc/contracts';
+import {
+  RagRequestSchema,
+  encodeSseEvent,
+  type ChatStreamEvent,
+} from '@veridoc/contracts';
 import { AiClient } from '../ai/ai.client';
 
 /**

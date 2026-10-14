@@ -13,7 +13,12 @@ describe('RetrieveController', () => {
   });
 
   it('forwards a valid request and returns passages', async () => {
-    const response = { query: 'revenue', passages: [], embeddingModel: 'm', embeddingDim: 384 };
+    const response = {
+      query: 'revenue',
+      passages: [],
+      embeddingModel: 'm',
+      embeddingDim: 384,
+    };
     const ai = {
       retrieve: jest.fn().mockResolvedValue(response),
     } as unknown as AiClient;

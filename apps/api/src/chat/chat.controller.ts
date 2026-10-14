@@ -1,4 +1,12 @@
-import { BadRequestException, Body, Controller, Logger, Post, Req, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Logger,
+  Post,
+  Req,
+  Res,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 import {
   ChatRequestSchema,

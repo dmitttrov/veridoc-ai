@@ -14,7 +14,8 @@ import {
   type DocumentIngestionResult,
   type StoredDocument,
 } from '@veridoc/contracts';
-import { AiClient, AiUpstreamError } from '../ai/ai.client';
+import { AiClient } from '../ai/ai.client';
+import { mapUpstreamError } from '../common/upstream-error';
 
 /**
  * Multipart upload + stored-document listing.
@@ -55,7 +56,7 @@ export class UploadController {
     try {
       return await this.ai.ingestDocument(file.buffer, file.originalname, mime);
     } catch (err) {
-      throw this.mapUpstream(err);
+      throw mapUpstreamError(err, this.logger);
     }
   }
 
@@ -64,19 +65,7 @@ export class UploadController {
     try {
       return await this.ai.listStoredDocuments();
     } catch (err) {
-      throw this.mapUpstream(err);
+      throw mapUpstreamError(err, this.logger);
     }
-  }
-
-  private mapUpstream(err: unknown): HttpException {
-    if (err instanceof AiUpstreamError) {
-      // Preserve the AI service's status + code; message is already sanitized.
-      return new HttpException({ code: err.code, message: err.message }, err.status);
-    }
-    this.logger.error(`ingestion failed: ${(err as Error).message}`);
-    return new HttpException(
-      { code: 'gateway_upstream_error', message: 'Document service is unavailable.' },
-      503,
-    );
   }
 }

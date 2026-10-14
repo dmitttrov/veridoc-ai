@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, HttpException, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
 import { RetrievalRequestSchema, type RetrievalResponse } from '@veridoc/contracts';
-import { AiClient, AiUpstreamError } from '../ai/ai.client';
+import { AiClient } from '../ai/ai.client';
+import { mapUpstreamError } from '../common/upstream-error';
 
 /** Hybrid retrieval. Returns source passages (evidence), not generated answers. */
 @Controller('api/retrieve')
@@ -20,13 +21,7 @@ export class RetrieveController {
     try {
       return await this.ai.retrieve(parsed.data);
     } catch (err) {
-      if (err instanceof AiUpstreamError) {
-        throw new HttpException({ code: err.code, message: err.message }, err.status);
-      }
-      throw new HttpException(
-        { code: 'gateway_upstream_error', message: 'Retrieval service is unavailable.' },
-        503,
-      );
+      throw mapUpstreamError(err);
     }
   }
 }

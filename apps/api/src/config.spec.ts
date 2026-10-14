@@ -14,6 +14,12 @@ describe('loadConfig', () => {
     expect(config.AI_SERVICE_URL).toBe('http://ai:9000');
   });
 
+  it('treats empty-string env vars as unset (applies defaults)', () => {
+    const config = loadConfig({ PORT: '', AI_SERVICE_URL: '' });
+    expect(config.PORT).toBe(3000);
+    expect(config.AI_SERVICE_URL).toBe('http://127.0.0.1:8000');
+  });
+
   it('throws on an invalid URL', () => {
     expect(() => loadConfig({ AI_SERVICE_URL: 'not-a-url' })).toThrow(
       /Invalid environment configuration/,

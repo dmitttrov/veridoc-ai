@@ -2,12 +2,16 @@ import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { json } from 'express';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { loadConfig } from './config';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
+
+  // Security headers at the edge (CSP, HSTS, no-sniff, frame options, …).
+  app.use(helmet());
 
   // Explicit JSON body limit. The contract permits message + up to 50 history
   // turns (~hundreds of KB), which exceeds Express's 100kb default; set a clear

@@ -1,13 +1,18 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type {
-  ChatRequest,
-  DocumentIngestionResult,
-  DocumentSummary,
-  RagRequest,
-  RetrievalRequest,
-  RetrievalResponse,
-  StoredDocument,
+import {
+  type ChatRequest,
+  type DocumentIngestionResult,
+  DocumentIngestionResultSchema,
+  type DocumentSummary,
+  DocumentSummarySchema,
+  type RagRequest,
+  type RetrievalRequest,
+  type RetrievalResponse,
+  RetrievalResponseSchema,
+  type StoredDocument,
+  StoredDocumentSchema,
 } from '@veridoc/contracts';
+import { z } from 'zod';
 import { CONFIG, type AppConfig } from '../config';
 
 /** A structured upstream error with a stable code and an HTTP status to mirror. */
@@ -32,20 +37,29 @@ export class AiClient {
 
   constructor(@Inject(CONFIG) private readonly config: AppConfig) {}
 
+  /**
+   * Validate an upstream JSON payload against the shared contract. The AI
+   * service is trusted, but a shape mismatch means a contract drift or a bug —
+   * surface it as a 502-class error rather than forwarding malformed data.
+   */
+  private parse<T>(data: unknown, schema: z.ZodType<T>): T {
+    const result = schema.safeParse(data);
+    if (!result.success) {
+      this.logger.error(`upstream response failed validation: ${result.error.message}`);
+      throw new AiUpstreamError(
+        502,
+        'ai_invalid_response',
+        'The AI service returned an unexpected response.',
+      );
+    }
+    return result.data;
+  }
+
   /** Fetch the list of available (fixture) documents. */
   async listDocuments(): Promise<DocumentSummary[]> {
     const url = `${this.config.AI_SERVICE_URL}/v1/documents`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.config.AI_REQUEST_TIMEOUT_MS);
-    try {
-      const resp = await fetch(url, { signal: controller.signal });
-      if (!resp.ok) {
-        throw new Error(`AI service returned ${resp.status} for ${url}`);
-      }
-      return (await resp.json()) as DocumentSummary[];
-    } finally {
-      clearTimeout(timeout);
-    }
+    const resp = await this.getJson(url);
+    return this.parse(await resp.json(), z.array(DocumentSummarySchema));
   }
 
   /** Forward an uploaded PDF to the internal AI service for ingestion. */
@@ -72,7 +86,7 @@ export class AiClient {
       if (!resp.ok) {
         throw await this.toUpstreamError(resp, url);
       }
-      return (await resp.json()) as DocumentIngestionResult;
+      return this.parse(await resp.json(), DocumentIngestionResultSchema);
     } finally {
       clearTimeout(timeout);
     }
@@ -82,7 +96,7 @@ export class AiClient {
   async listStoredDocuments(): Promise<StoredDocument[]> {
     const url = `${this.config.AI_SERVICE_URL}/v1/documents/stored`;
     const resp = await this.getJson(url);
-    return (await resp.json()) as StoredDocument[];
+    return this.parse(await resp.json(), z.array(StoredDocumentSchema));
   }
 
   /** Run hybrid retrieval and return source passages (evidence). */
@@ -103,7 +117,7 @@ export class AiClient {
       if (!resp.ok) {
         throw await this.toUpstreamError(resp, url);
       }
-      return (await resp.json()) as RetrievalResponse;
+      return this.parse(await resp.json(), RetrievalResponseSchema);
     } finally {
       clearTimeout(timeout);
     }
@@ -133,7 +147,9 @@ export class AiClient {
     let code = 'ai_upstream_error';
     let message = `AI service returned ${resp.status}`;
     try {
-      const body = (await resp.json()) as { detail?: { code?: string; message?: string } };
+      const body = (await resp.json()) as {
+        detail?: { code?: string; message?: string };
+      };
       if (body?.detail?.code) code = body.detail.code;
       if (body?.detail?.message) message = body.detail.message;
     } catch {

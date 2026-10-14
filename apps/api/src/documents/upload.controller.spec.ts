@@ -21,7 +21,9 @@ describe('UploadController', () => {
   it('rejects a missing file', async () => {
     const ai = { ingestDocument: jest.fn() } as unknown as AiClient;
     const controller = new UploadController(ai);
-    await expect(controller.upload(undefined)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(controller.upload(undefined)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
     expect(ai.ingestDocument).not.toHaveBeenCalled();
   });
 
@@ -54,7 +56,9 @@ describe('UploadController', () => {
     const ai = {
       ingestDocument: jest
         .fn()
-        .mockRejectedValue(new AiUpstreamError(422, 'pdf_encrypted', 'Encrypted PDFs are not accepted.')),
+        .mockRejectedValue(
+          new AiUpstreamError(422, 'pdf_encrypted', 'Encrypted PDFs are not accepted.'),
+        ),
     } as unknown as AiClient;
     const controller = new UploadController(ai);
 
@@ -62,7 +66,9 @@ describe('UploadController', () => {
     try {
       await controller.upload(pdfFile());
     } catch (err) {
-      expect((err as HttpException).getResponse()).toMatchObject({ code: 'pdf_encrypted' });
+      expect((err as HttpException).getResponse()).toMatchObject({
+        code: 'pdf_encrypted',
+      });
     }
   });
 
