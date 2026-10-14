@@ -1,40 +1,34 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { DocumentSummary } from '@veridoc/contracts';
+import { useCallback, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ChatPanel } from './components/ChatPanel';
 import { DocumentList } from './components/DocumentList';
 import { RagView } from './components/RagView';
 import { RetrievalView } from './components/RetrievalView';
 import { useChat } from './hooks/useChat';
+import { cx } from './lib/cx';
 import { fetchDocuments } from './lib/api';
+import styles from './styles.module.css';
 
 type Mode = 'rag' | 'retrieval' | 'chat';
 
 export function App() {
   const [mode, setMode] = useState<Mode>('rag');
-
-  const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [docsLoading, setDocsLoading] = useState(true);
-  const [docsError, setDocsError] = useState<string | null>(null);
+
+  // React Query owns the fetch lifecycle (caching, dedup, and request
+  // cancellation via the injected AbortSignal).
+  const documentsQuery = useQuery({
+    queryKey: ['documents'],
+    queryFn: ({ signal }) => fetchDocuments(signal),
+  });
+  const documents = documentsQuery.data ?? [];
+  const docsError = documentsQuery.isError
+    ? documentsQuery.error instanceof Error
+      ? documentsQuery.error.message
+      : 'Failed to load documents'
+    : null;
 
   const { turns, status, error, mockMode, send, stop } = useChat();
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchDocuments(controller.signal)
-      .then((docs) => {
-        setDocuments(docs);
-        setDocsError(null);
-      })
-      .catch((err: unknown) => {
-        if (controller.signal.aborted) return;
-        setDocsError(err instanceof Error ? err.message : 'Failed to load documents');
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setDocsLoading(false);
-      });
-    return () => controller.abort();
-  }, []);
 
   const toggleDocument = useCallback((id: string) => {
     setSelectedIds((prev) =>
@@ -50,18 +44,20 @@ export function App() {
   );
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <div className="brand">
+    <div className={styles.app}>
+      <header className={styles['app-header']}>
+        <div className={styles.brand}>
           <h1>Veridoc AI</h1>
-          <span className="tagline">Source-grounded financial document intelligence</span>
+          <span className={styles.tagline}>
+            Source-grounded financial document intelligence
+          </span>
         </div>
-        <div className="header-right">
-          <div className="mode-switch" role="tablist" aria-label="View mode">
+        <div className={styles['header-right']}>
+          <div className={styles['mode-switch']} role="tablist" aria-label="View mode">
             <button
               role="tab"
               aria-selected={mode === 'rag'}
-              className={mode === 'rag' ? 'active' : ''}
+              className={mode === 'rag' ? styles.active : ''}
               onClick={() => setMode('rag')}
             >
               Grounded Answer
@@ -69,7 +65,7 @@ export function App() {
             <button
               role="tab"
               aria-selected={mode === 'retrieval'}
-              className={mode === 'retrieval' ? 'active' : ''}
+              className={mode === 'retrieval' ? styles.active : ''}
               onClick={() => setMode('retrieval')}
             >
               Retrieval
@@ -77,7 +73,7 @@ export function App() {
             <button
               role="tab"
               aria-selected={mode === 'chat'}
-              className={mode === 'chat' ? 'active' : ''}
+              className={mode === 'chat' ? styles.active : ''}
               onClick={() => setMode('chat')}
             >
               Mock Chat
@@ -85,7 +81,7 @@ export function App() {
           </div>
           {mode === 'chat' && mockMode !== false && (
             <span
-              className="mock-badge"
+              className={styles['mock-badge']}
               title="Responses are produced by a deterministic mock, not a real model."
             >
               MOCK MODE
@@ -95,7 +91,7 @@ export function App() {
       </header>
 
       {mode === 'chat' && error && (
-        <div role="alert" className="banner banner-error">
+        <div role="alert" className={cx(styles.banner, styles['banner-error'])}>
           {error}
         </div>
       )}
@@ -104,11 +100,11 @@ export function App() {
         {mode === 'rag' && <RagView />}
         {mode === 'retrieval' && <RetrievalView />}
         {mode === 'chat' && (
-          <div className="layout">
+          <div className={styles.layout}>
             <DocumentList
               documents={documents}
               selectedIds={selectedIds}
-              loading={docsLoading}
+              loading={documentsQuery.isLoading}
               error={docsError}
               onToggle={toggleDocument}
             />
@@ -117,7 +113,7 @@ export function App() {
         )}
       </main>
 
-      <footer className="app-footer">
+      <footer className={styles['app-footer']}>
         <span>
           {mode === 'rag' &&
             'Phase 3 · grounded RAG · hybrid retrieval + reranking + verified citations · model not fine-tuned.'}

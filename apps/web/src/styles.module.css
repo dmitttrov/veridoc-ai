@@ -1,42 +1,6 @@
-:root {
-  --bg: #0f172a;
-  --surface: #1e293b;
-  --surface-2: #273449;
-  --border: #334155;
-  --text: #e2e8f0;
-  --text-dim: #94a3b8;
-  --accent: #38bdf8;
-  --accent-contrast: #082f49;
-  --error: #f87171;
-  --warn-bg: #78350f;
-  --warn-fg: #fcd34d;
-  --radius: 10px;
-  color-scheme: dark;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  line-height: 1.5;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
+/* Component-scoped styles (CSS Modules). Class names here are locally scoped
+ * and hashed at build time; reference them via the imported `styles` object.
+ * Global tokens, resets, the base button, and .sr-only live in global.css. */
 
 .app {
   display: flex;
@@ -252,23 +216,17 @@ body {
   font: inherit;
 }
 
-button {
-  font: inherit;
-  font-weight: 600;
-  padding: 0 1.1rem;
+.composer input[type='text'] {
+  flex: 1;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  border: 1px solid transparent;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  cursor: pointer;
+  padding: 0.6rem;
+  font: inherit;
 }
 
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-button.secondary {
+.secondary {
   background: transparent;
   color: var(--text);
   border-color: var(--border);
@@ -323,16 +281,6 @@ button.secondary {
   padding: 0.6rem 0.75rem;
   border-radius: 8px;
   margin: 0 0 0.75rem;
-}
-
-.composer input[type='text'] {
-  flex: 1;
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.6rem;
-  font: inherit;
 }
 
 .passages {
@@ -428,7 +376,7 @@ button.secondary {
   white-space: pre-wrap;
 }
 
-.hint.warn {
+.warn {
   color: var(--warn-fg);
 }
 

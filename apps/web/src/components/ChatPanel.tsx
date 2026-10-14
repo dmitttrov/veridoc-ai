@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { ChatTurn, ChatStatus } from '../hooks/useChat';
+import { cx } from '../lib/cx';
+import styles from '../styles.module.css';
 
 interface Props {
   turns: ChatTurn[];
@@ -21,30 +23,44 @@ export function ChatPanel({ turns, status, onSend, onStop }: Props) {
   };
 
   return (
-    <section className="panel chat" aria-labelledby="chat-heading">
+    <section className={cx(styles.panel, styles.chat)} aria-labelledby="chat-heading">
       <h2 id="chat-heading">Conversation</h2>
 
-      <div className="messages" role="log" aria-live="polite" aria-relevant="additions text">
+      <div
+        className={styles.messages}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+      >
         {turns.length === 0 && (
-          <p className="hint">
+          <p className={styles.hint}>
             Ask a question about the selected documents to get started.
           </p>
         )}
         {turns.map((turn) => (
-          <article key={turn.id} className={`message message-${turn.role}`}>
-            <span className="message-role">{turn.role === 'user' ? 'You' : 'Veridoc'}</span>
-            <div className="message-content">
+          <article
+            key={turn.id}
+            className={cx(styles.message, turn.role === 'user' && styles['message-user'])}
+          >
+            <span className={styles['message-role']}>
+              {turn.role === 'user' ? 'You' : 'Veridoc'}
+            </span>
+            <div className={styles['message-content']}>
               {turn.content}
-              {turn.pending && <span className="cursor" aria-hidden="true">▋</span>}
+              {turn.pending && (
+                <span className={styles.cursor} aria-hidden="true">
+                  ▋
+                </span>
+              )}
             </div>
             {turn.citations && turn.citations.length > 0 && (
-              <ul className="citations">
+              <ul className={styles.citations}>
                 {turn.citations.map((c, i) => (
-                  <li key={`${turn.id}-cite-${i}`} className="citation">
-                    <span className="citation-source">
+                  <li key={`${turn.id}-cite-${i}`} className={styles.citation}>
+                    <span className={styles['citation-source']}>
                       {c.documentTitle} — p.{c.page}
                     </span>
-                    <span className="citation-snippet">“{c.snippet}”</span>
+                    <span className={styles['citation-snippet']}>“{c.snippet}”</span>
                   </li>
                 ))}
               </ul>
@@ -53,7 +69,7 @@ export function ChatPanel({ turns, status, onSend, onStop }: Props) {
         ))}
       </div>
 
-      <form className="composer" onSubmit={submit}>
+      <form className={styles.composer} onSubmit={submit}>
         <label htmlFor="chat-input" className="sr-only">
           Your question
         </label>
@@ -69,7 +85,7 @@ export function ChatPanel({ turns, status, onSend, onStop }: Props) {
           disabled={streaming}
         />
         {streaming ? (
-          <button type="button" onClick={onStop} className="secondary">
+          <button type="button" onClick={onStop} className={styles.secondary}>
             Stop
           </button>
         ) : (

@@ -38,9 +38,7 @@ export function useChat(): UseChat {
     abortRef.current?.abort();
     abortRef.current = null;
     setStatus('idle');
-    setTurns((prev) =>
-      prev.map((t) => (t.pending ? { ...t, pending: false } : t)),
-    );
+    setTurns((prev) => prev.map((t) => (t.pending ? { ...t, pending: false } : t)));
   }, []);
 
   const send = useCallback(

@@ -1,24 +1,44 @@
-import type {
-  ChatRequest,
-  ChatStreamEvent,
-  DocumentIngestionResult,
-  DocumentSummary,
-  RagRequest,
-  RetrievalRequest,
-  RetrievalResponse,
-  StoredDocument,
+import {
+  type ChatRequest,
+  type ChatStreamEvent,
+  type DocumentIngestionResult,
+  DocumentIngestionResultSchema,
+  type DocumentSummary,
+  DocumentSummarySchema,
+  type RagRequest,
+  type RetrievalRequest,
+  type RetrievalResponse,
+  RetrievalResponseSchema,
+  type StoredDocument,
+  StoredDocumentSchema,
 } from '@veridoc/contracts';
+import { z } from 'zod';
 import { parseSseStream } from './sse';
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? 'http://localhost:3000';
+
+/**
+ * Parse a JSON response against the shared contract. Responses are untrusted
+ * over the wire, so we validate at the boundary (like the SSE stream does)
+ * rather than casting — a shape mismatch fails loudly here instead of surfacing
+ * as a confusing render error deep in the tree.
+ */
+async function parseJson<T>(resp: Response, schema: z.ZodType<T>): Promise<T> {
+  const data: unknown = await resp.json();
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    throw new Error('Unexpected response shape from the server');
+  }
+  return result.data;
+}
 
 export async function fetchDocuments(signal?: AbortSignal): Promise<DocumentSummary[]> {
   const resp = await fetch(`${API_BASE_URL}/api/documents`, { signal });
   if (!resp.ok) {
     throw new Error(`Failed to load documents (${resp.status})`);
   }
-  return (await resp.json()) as DocumentSummary[];
+  return parseJson(resp, z.array(DocumentSummarySchema));
 }
 
 /**
@@ -89,7 +109,7 @@ export async function uploadDocument(
   if (!resp.ok) {
     throw await readError(resp, `Upload failed (${resp.status})`);
   }
-  return (await resp.json()) as DocumentIngestionResult;
+  return parseJson(resp, DocumentIngestionResultSchema);
 }
 
 export async function fetchStoredDocuments(
@@ -99,7 +119,7 @@ export async function fetchStoredDocuments(
   if (!resp.ok) {
     throw await readError(resp, `Failed to load stored documents (${resp.status})`);
   }
-  return (await resp.json()) as StoredDocument[];
+  return parseJson(resp, z.array(StoredDocumentSchema));
 }
 
 export async function retrieve(
@@ -115,5 +135,5 @@ export async function retrieve(
   if (!resp.ok) {
     throw await readError(resp, `Retrieval failed (${resp.status})`);
   }
-  return (await resp.json()) as RetrievalResponse;
+  return parseJson(resp, RetrievalResponseSchema);
 }
