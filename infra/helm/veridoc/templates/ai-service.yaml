@@ -1,0 +1,18 @@
+{{- if .Values.ai.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "veridoc.ai.fullname" . }}
+  labels:
+    {{- include "veridoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ai
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.ai.port }}
+      targetPort: http
+  selector:
+    {{- include "veridoc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ai
+{{- end }}

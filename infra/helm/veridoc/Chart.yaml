@@ -1,0 +1,24 @@
+apiVersion: v2
+name: veridoc
+description: >-
+  Veridoc AI — source-grounded financial document intelligence. Deploys the web
+  SPA, the NestJS API gateway, and the FastAPI AI service, with an optional
+  bundled PostgreSQL + pgvector database for demo/dev.
+type: application
+# Chart version — bump on chart changes.
+version: 0.1.0
+# Default application version; the image tag defaults to this (override with
+# image.tag to pin a published sha-/semver tag).
+appVersion: "0.1.0"
+kubeVersion: ">=1.23.0-0"
+keywords:
+  - rag
+  - document-intelligence
+  - fastapi
+  - nestjs
+  - pgvector
+home: https://github.com/dmitttrov/veridoc-ai
+sources:
+  - https://github.com/dmitttrov/veridoc-ai
+maintainers:
+  - name: dmitttrov

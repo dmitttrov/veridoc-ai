@@ -1,0 +1,53 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- if .Values.ai.enabled }}
+# The AI service accepts traffic only from the API gateway (internal-only design).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "veridoc.ai.fullname" . }}
+  labels:
+    {{- include "veridoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ai
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "veridoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ai
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "veridoc.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: {{ .Values.ai.port }}
+{{- end }}
+{{- if .Values.postgresql.enabled }}
+---
+# Postgres accepts traffic only from the AI service.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "veridoc.postgresql.fullname" . }}
+  labels:
+    {{- include "veridoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "veridoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgresql
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "veridoc.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: ai
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
+{{- end }}
