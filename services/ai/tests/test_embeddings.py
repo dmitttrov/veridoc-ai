@@ -42,14 +42,23 @@ def test_empty_text_is_zero_vector() -> None:
     assert all(x == 0.0 for x in v)
 
 
-def test_factory_enforces_dimension() -> None:
-    # A provider whose dim disagrees with the configured schema dim is rejected.
-    settings = Settings(embedding_provider="deterministic", embedding_dim=128)
-    provider = build_embedding_provider(settings)
-    assert provider.dim == 128  # deterministic adapts to configured dim
+def test_factory_rejects_unsupported_dim() -> None:
+    # The DB column is fixed at vector(384); a mismatched AI_EMBEDDING_DIM must
+    # fail fast at startup, not deep inside the first insert.
+    with pytest.raises(ValueError, match="384"):
+        build_embedding_provider(Settings(embedding_provider="deterministic", embedding_dim=128))
 
-    # Mismatch is impossible for deterministic (it adapts), so assert the guard
-    # directly: a provider reporting a different dim than configured must raise.
+
+def test_factory_builds_supported_dim() -> None:
+    provider = build_embedding_provider(
+        Settings(embedding_provider="deterministic", embedding_dim=384)
+    )
+    assert provider.dim == 384
+
+
+def test_factory_enforces_dimension() -> None:
+    # A provider reporting a different dim than the configured (supported) dim
+    # must raise — assert the guard directly with a bogus provider.
     class Bogus:
         model_id = "bogus"
         dim = 999

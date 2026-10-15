@@ -73,7 +73,7 @@ async def _retrieval_metrics(
     filename_to_id: dict[str, str],
     reranker: Reranker | None,
 ) -> dict[str, Any]:
-    recall_hits = 0
+    recall_sum = 0.0
     reciprocal_sum = 0.0
     for item in RETRIEVAL_EVAL:
         gold = _gold_pairs(item, filename_to_id)
@@ -89,13 +89,18 @@ async def _retrieval_metrics(
             for i, p in enumerate(resp.passages)
             if (p.document_id, p.page) in gold
         ]
+        # True set-based Recall@5: the fraction of this item's gold pairs that
+        # appear in the top-K (a multi-gold "compare" item is only fully recalled
+        # when ALL its gold pages are retrieved, not just the first).
+        if gold:
+            top_k_pairs = {(p.document_id, p.page) for p in resp.passages[:RECALL_K]}
+            recall_sum += len(top_k_pairs & gold) / len(gold)
+        # MRR@10 uses the rank of the first relevant passage (conventional).
         first = ranks[0] if ranks else None
-        if first is not None and first < RECALL_K:
-            recall_hits += 1
         reciprocal_sum += 1.0 / (first + 1) if first is not None else 0.0
 
     n = len(RETRIEVAL_EVAL)
-    return {"recall@5": round(recall_hits / n, 4), "mrr@10": round(reciprocal_sum / n, 4)}
+    return {"recall@5": round(recall_sum / n, 4), "mrr@10": round(reciprocal_sum / n, 4)}
 
 
 async def _generation_metrics(

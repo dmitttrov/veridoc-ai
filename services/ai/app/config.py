@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     # --- Phase 2: ingestion limits & chunking -----------------------------
     max_upload_bytes: int = 25 * 1024 * 1024  # 25 MiB
     max_pages: int = 300
+    # Cap on cumulative extracted text. Byte/page limits do not bound a PDF whose
+    # compressed content streams expand to huge text (a "PDF bomb"); ~20M chars is
+    # generous for 300 pages of real text but stops a decompression bomb.
+    max_extracted_chars: int = 20_000_000
     pdf_parse_timeout_s: float = 30.0
     chunk_size_chars: int = 800
     chunk_overlap_chars: int = 150

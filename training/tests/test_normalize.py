@@ -24,6 +24,20 @@ def test_accounting_negative_with_currency_and_unit() -> None:
     assert values_match("$(42,012)", "USD millions", "-42012000000", None)
 
 
+def test_parenthesized_negative_with_trailing_scale_word() -> None:
+    # Regression: a scale word after the closing paren must not drop the sign.
+    assert parse_number("$(42) million") == Decimal(-42_000_000)
+    assert parse_number("(1,234) billion") == Decimal(-1_234_000_000_000)
+    assert values_match("$(42) million", None, "(42)", "USD millions")
+
+
+def test_to_base_does_not_double_scale() -> None:
+    # Regression: scale carried in BOTH the value text and the unit must be
+    # applied once, not twice.
+    assert to_base("383,285 million", "USD millions") == Decimal(383_285_000_000)
+    assert values_match("383,285 million", "USD millions", "383,285", "USD millions")
+
+
 def test_to_base_scales_from_value_and_unit() -> None:
     assert to_base("383,285", "USD millions") == Decimal(383_285_000_000)
     assert to_base("383.285", "billion") == Decimal(383_285_000_000)

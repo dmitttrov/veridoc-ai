@@ -106,6 +106,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         if app.state.pool is not None:
             await app.state.pool.close()
+        aclose = getattr(app.state.provider, "aclose", None)
+        if aclose is not None:
+            await aclose()
 
 
 def create_app() -> FastAPI:

@@ -48,11 +48,14 @@ async def test_generate_connection_failure() -> None:
     provider = OpenAICompatibleProvider(
         base_url="http://127.0.0.1:0/v1", model="echo", timeout_s=1.0
     )
-    with pytest.raises(InferenceError) as ei:
-        await provider.generate(
-            [ChatMessage(role="user", content="q")], max_tokens=16, temperature=0.0
-        )
-    assert ei.value.code in {"inference_unavailable", "inference_timeout"}
+    try:
+        with pytest.raises(InferenceError) as ei:
+            await provider.generate(
+                [ChatMessage(role="user", content="q")], max_tokens=16, temperature=0.0
+            )
+        assert ei.value.code in {"inference_unavailable", "inference_timeout"}
+    finally:
+        await provider.aclose()  # provider owns its client; close it
 
 
 async def test_stream_chat_yields_tokens_then_done() -> None:

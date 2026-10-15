@@ -147,5 +147,14 @@ and deferred; none should be assumed present.
 
 ## 10. Reporting
 
-This is a reference project, not a hosted service. Security issues can be raised
-via a GitHub issue (once published) describing the concern and reproduction.
+This is a reference project, not a hosted service. Even so, please report
+suspected vulnerabilities **privately** rather than in a public issue, so a fix
+can be prepared before details are disclosed:
+
+- Preferred: GitHub [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
+  (the repository's **Security → Report a vulnerability** tab).
+- Describe the concern, impact, and a minimal reproduction.
+
+Public GitHub issues are welcome for **non-security** bugs and reproduction
+reports. Please do not include exploit details for an unpatched vulnerability in
+a public issue.

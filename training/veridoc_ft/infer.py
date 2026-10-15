@@ -28,7 +28,7 @@ def load_model(config: TrainConfig, adapter_path: str | None = None) -> tuple[An
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
     model.eval()
-    model.generation_label = label  # type: ignore[attr-defined]
+    model.generation_label = label
     return model, tokenizer
 
 
@@ -56,7 +56,8 @@ def generate_text(
         pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
     )
     new_tokens = out[0][enc["input_ids"].shape[1] :]
-    return tokenizer.decode(new_tokens, skip_special_tokens=True)
+    text: str = tokenizer.decode(new_tokens, skip_special_tokens=True)
+    return text
 
 
 def extract(

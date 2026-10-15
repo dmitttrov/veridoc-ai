@@ -40,9 +40,7 @@ npm-debug.log*
 
 # Project data that must never be committed
 # (uploaded docs, model weights, datasets, generated artifacts)
-data/uploads/
-data/models/
-data/datasets/
+data/
 artifacts/
 *.gguf
 *.safetensors

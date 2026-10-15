@@ -62,10 +62,14 @@ def parse_number(text: str) -> Decimal | None:
     # Strip a leading currency symbol so "$(1,234)" is recognized as negative.
     s = re.sub(r"^[$€£¥]\s*", "", s).strip()
     negative = False
-    # Accounting negatives: (1,234) or $(1,234)
-    if s.startswith("(") and s.endswith(")"):
+    # Accounting negatives: (1,234), $(1,234), and — crucially — scaled forms
+    # like "(42) million" where a scale word trails the closing paren. Match the
+    # parenthesized magnitude independently of any suffix so the sign is never
+    # dropped when a unit word follows.
+    paren = re.match(r"\(\s*([\d,]+(?:\.\d+)?)\s*\)(.*)$", s)
+    if paren:
         negative = True
-        s = s[1:-1]
+        s = f"{paren.group(1)}{paren.group(2)}"
     m = _NUM_RE.search(s)
     if not m:
         return None
@@ -82,7 +86,9 @@ def parse_number(text: str) -> Decimal | None:
 
 def to_base(value: str | None, unit: str | None) -> Decimal | None:
     """Canonical magnitude: whole-dollar Decimal for money, plain number for
-    percent. Scale comes from the value text AND the unit text."""
+    percent. Scale is taken from exactly one source: if the value text already
+    carries an inline scale word (e.g. "383,285 million"), the unit scale is NOT
+    re-applied, otherwise the magnitude would be multiplied twice."""
     if value is None:
         return None
     base = parse_number(value)
@@ -90,7 +96,8 @@ def to_base(value: str | None, unit: str | None) -> Decimal | None:
         return None
     if is_percent(unit, value):
         return base  # percentage points; no monetary scaling
-    base *= _scale_from_words(unit or "")
+    if _scale_from_words(value) == 1:
+        base *= _scale_from_words(unit or "")
     return base
 
 

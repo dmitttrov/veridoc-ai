@@ -21,6 +21,21 @@ def test_v2_targets_negatives_and_synonyms() -> None:
             assert r.evidence in {marker_for(i) for i in range(len(e.evidence))}
 
 
+def test_v2_seed_changes_generated_values() -> None:
+    # Regression: the v2 half must honor --seed (previously ignored).
+    a = generate_v2_examples(1)
+    b = generate_v2_examples(2)
+    assert [e.id for e in a] == [e.id for e in b]  # structure stable
+    assert any(x.target != y.target for x, y in zip(a, b, strict=True))  # values differ
+
+
+def test_v2_restatement_changes_the_figure() -> None:
+    # Regression: a "conflicting" restatement must not restate to the same value.
+    for e in generate_v2_examples():
+        if e.category == "conflicting":
+            assert e.evidence[0] != e.evidence[1]
+
+
 def test_v2_disjoint_from_sec_benchmark() -> None:
     sec = {c[0] for c in SEC_COMPANIES}
     assert set(V2_COMPANIES).isdisjoint(sec)  # no company overlap with frozen eval

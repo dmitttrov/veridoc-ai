@@ -78,8 +78,24 @@ def tokenize_examples(examples: list[Any], tokenizer: Any, config: TrainConfig) 
         target = json.dumps(ex.target, separators=(",", ":"), sort_keys=True)
         target_ids = tokenizer(target, add_special_tokens=False)["input_ids"]
         eos = [tokenizer.eos_token_id] if tokenizer.eos_token_id is not None else []
-        input_ids = (prompt_ids + target_ids + eos)[: config.max_seq_len]
-        labels = ([-100] * len(prompt_ids) + target_ids + eos)[: config.max_seq_len]
+        # Truncate the PROMPT, never the target: slicing the concatenation at the
+        # end (the previous behaviour) could drop part or all of the supervised
+        # target/EOS, yielding label rows that teach nothing (all -100).
+        budget = config.max_seq_len - len(target_ids) - len(eos)
+        if budget <= 0:
+            logger.warning(
+                "skipping example %s: target (%d) + EOS exceeds max_seq_len=%d",
+                getattr(ex, "id", "?"), len(target_ids), config.max_seq_len,
+            )
+            continue
+        if len(prompt_ids) > budget:
+            logger.warning(
+                "truncating prompt of example %s from %d to %d tokens to fit the target",
+                getattr(ex, "id", "?"), len(prompt_ids), budget,
+            )
+            prompt_ids = prompt_ids[:budget]
+        input_ids = prompt_ids + target_ids + eos
+        labels = [-100] * len(prompt_ids) + target_ids + eos
         rows.append(
             {"input_ids": input_ids, "attention_mask": [1] * len(input_ids), "labels": labels}
         )
@@ -135,8 +151,8 @@ def train(
     trainer = Trainer(
         model=model,
         args=args,
-        train_dataset=train_rows,  # type: ignore[arg-type]
-        eval_dataset=eval_rows,  # type: ignore[arg-type]
+        train_dataset=train_rows,
+        eval_dataset=eval_rows,
         data_collator=PadCollator(pad_token_id),
     )
 
@@ -173,12 +189,29 @@ def load_base(config: TrainConfig) -> tuple[Any, Any]:
     )
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
-    dtype = torch.float32
-    if torch.cuda.is_available():
-        dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-    model = AutoModelForCausalLM.from_pretrained(
-        config.model_id, revision=config.model_revision, dtype=dtype
-    )
+    # Drive the load dtype from the SAME resolved precision as TrainingArguments,
+    # so an explicit bf16/fp16 override (e.g. forcing fp32 to debug precision)
+    # actually loads matching weights instead of silently using bf16/fp16.
+    flags = precision_flags(config)
+    dtype = torch.bfloat16 if flags["bf16"] else torch.float16 if flags["fp16"] else torch.float32
+    if config.use_qlora:
+        if not torch.cuda.is_available():
+            raise ValueError("use_qlora=True requires CUDA; bitsandbytes is GPU-only.")
+        from transformers import BitsAndBytesConfig
+
+        quant = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=dtype,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            config.model_id, revision=config.model_revision, quantization_config=quant
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            config.model_id, revision=config.model_revision, dtype=dtype
+        )
     return model, tokenizer
 
 
@@ -187,6 +220,12 @@ def run(config: TrainConfig) -> dict:
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
     model, tokenizer = load_base(config)
+    if config.use_qlora:
+        from peft import prepare_model_for_kbit_training
+
+        model = prepare_model_for_kbit_training(
+            model, use_gradient_checkpointing=config.gradient_checkpointing
+        )
     model = attach_lora(model, config)
     model.print_trainable_parameters()
 

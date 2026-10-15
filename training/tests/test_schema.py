@@ -40,3 +40,20 @@ def test_parse_statuses() -> None:
 
     r, status = parse_extraction('{"metric":"x","supported":true}')  # violates invariant
     assert status == "schema_invalid"
+
+
+def test_parse_valid_json_followed_by_trailing_braces() -> None:
+    # Regression: a valid object followed by text containing braces must parse.
+    ok = ExtractionResult(
+        metric="revenue", value="482.6", unit="USD millions",
+        period="FY2023", evidence="E1", supported=True,
+    ).to_json()
+    r, status = parse_extraction(ok + "\nNote: see {appendix} for details.")
+    assert status == "ok" and r is not None and r.value == "482.6"
+
+
+def test_supported_rejects_empty_value() -> None:
+    with pytest.raises(ValueError):
+        ExtractionResult(metric="revenue", value="", evidence="E1", supported=True)
+    with pytest.raises(ValueError):
+        ExtractionResult(metric="revenue", value="   ", evidence="E1", supported=True)

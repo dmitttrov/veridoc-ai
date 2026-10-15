@@ -5,8 +5,21 @@ from app.config import Settings
 from app.embeddings.base import EmbeddingProvider
 from app.embeddings.deterministic import DeterministicEmbeddingProvider
 
+# The DB embedding column is fixed at vector(384) with CHECK (embedding_dim = 384)
+# in app/db/migrations/0001_init.sql. Changing the dimension requires a new
+# migration, so reject a mismatched AI_EMBEDDING_DIM at startup rather than
+# failing deep inside the first insert.
+SUPPORTED_EMBEDDING_DIM = 384
+
 
 def build_embedding_provider(settings: Settings) -> EmbeddingProvider:
+    if settings.embedding_dim != SUPPORTED_EMBEDDING_DIM:
+        raise ValueError(
+            f"AI_EMBEDDING_DIM={settings.embedding_dim} is unsupported; the database "
+            f"schema fixes the embedding column at vector({SUPPORTED_EMBEDDING_DIM}). "
+            "Changing the dimension requires a new migration."
+        )
+
     provider: EmbeddingProvider
     if settings.embedding_provider == "deterministic":
         provider = DeterministicEmbeddingProvider(dim=settings.embedding_dim)

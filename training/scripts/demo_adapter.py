@@ -12,11 +12,15 @@ Run on the GPU server:
 """
 from __future__ import annotations
 
+import argparse
+import sys
+from pathlib import Path
+
 from veridoc_ft.config import TrainConfig
 from veridoc_ft.infer import extract, load_model
 from veridoc_ft.realeval.normalize import values_match
 
-ADAPTER = "artifacts/adapter-v2"
+DEFAULT_ADAPTER = "artifacts/adapter-v2"
 
 # (tag, question, evidence, gold_value_or_None, gold_unit, source)
 CASES = [
@@ -71,11 +75,21 @@ def _fmt(result) -> str:
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(description="BASE vs fine-tuned adapter demo")
+    ap.add_argument("--adapter", default=DEFAULT_ADAPTER,
+                    help=f"path to the trained LoRA adapter (default: {DEFAULT_ADAPTER})")
+    args = ap.parse_args()
+    if not Path(args.adapter).exists():
+        sys.exit(
+            f"Adapter not found at {args.adapter!r}. Train it first (see the training "
+            "README) or pass --adapter <path>."
+        )
+
     cfg = TrainConfig()
     print("Loading BASE Qwen/Qwen3-0.6B @", cfg.model_revision[:12], "...", flush=True)
     base_m, base_t = load_model(cfg, None)
-    print("Loading FINE-TUNED adapter-v2 (LoRA) ...", flush=True)
-    ad_m, ad_t = load_model(cfg, ADAPTER)
+    print(f"Loading FINE-TUNED adapter (LoRA) from {args.adapter} ...", flush=True)
+    ad_m, ad_t = load_model(cfg, args.adapter)
 
     bar = "=" * 78
     base_ok = ad_ok = 0

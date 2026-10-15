@@ -45,19 +45,29 @@ async def run_migrations(database_url: str) -> list[str]:
     conn = await asyncpg.connect(database_url)
     newly_applied: list[str] = []
     try:
-        applied = await _applied_versions(conn)
-        for path in _migration_files():
-            version = path.stem
-            if version in applied:
-                continue
-            sql = path.read_text(encoding="utf-8")
-            async with conn.transaction():
-                await conn.execute(sql)
-                await conn.execute(
-                    "INSERT INTO schema_migrations (version) VALUES ($1)", version
-                )
-            newly_applied.append(version)
-            logger.info("applied migration %s", version)
+        # Serialize concurrent migration runs (two API replicas, or CLI + API, or
+        # eval + API all call this at startup). A session-level advisory lock means
+        # the second runner waits for the first to finish instead of both racing to
+        # apply 0001 and one crashing.
+        await conn.execute("SELECT pg_advisory_lock(hashtext('veridoc_migrations'))")
+        try:
+            applied = await _applied_versions(conn)
+            for path in _migration_files():
+                version = path.stem
+                if version in applied:
+                    continue
+                sql = path.read_text(encoding="utf-8")
+                async with conn.transaction():
+                    await conn.execute(sql)
+                    await conn.execute(
+                        "INSERT INTO schema_migrations (version) VALUES ($1) "
+                        "ON CONFLICT (version) DO NOTHING",
+                        version,
+                    )
+                newly_applied.append(version)
+                logger.info("applied migration %s", version)
+        finally:
+            await conn.execute("SELECT pg_advisory_unlock(hashtext('veridoc_migrations'))")
     finally:
         await conn.close()
     return newly_applied

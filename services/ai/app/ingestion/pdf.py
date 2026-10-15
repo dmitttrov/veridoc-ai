@@ -30,6 +30,8 @@ class ExtractedPdf:
     page_count: int
     #: Raw (un-normalized) text per page, index 0 == page 1.
     page_texts: list[str]
+    #: Pages whose text extraction failed (empty text substituted, not fatal).
+    failed_page_count: int = 0
 
 
 def _assert_signature(data: bytes) -> None:
@@ -45,12 +47,13 @@ def validate_and_extract(
     *,
     max_bytes: int,
     max_pages: int,
+    max_extracted_chars: int = 20_000_000,
 ) -> ExtractedPdf:
     """Validate a PDF and extract per-page text.
 
     Raises a subclass of ``IngestionError`` for any expected rejection
-    (too large, too many pages, encrypted, malformed). This function is
-    synchronous and CPU-bound; callers run it under a timeout.
+    (too large, too many pages, too much extracted text, encrypted, malformed).
+    This function is synchronous and CPU-bound; callers run it under a timeout.
     """
     if len(data) == 0:
         raise PdfMalformed("Uploaded file is empty.")
@@ -85,11 +88,30 @@ def validate_and_extract(
         )
 
     page_texts: list[str] = []
+    failed_pages = 0
+    total_chars = 0
     for page in reader.pages:
         try:
             text = page.extract_text() or ""
-        except Exception as exc:  # a single bad page should not be silent
-            raise PdfMalformed("Failed to extract text from a page.") from exc
+        except Exception:
+            # One malformed page (odd fonts, broken content stream) is common and
+            # should not discard an otherwise-valid document. Substitute empty text
+            # and keep going; the count is surfaced on the result (not silent).
+            failed_pages += 1
+            page_texts.append("")
+            continue
+        total_chars += len(text)
+        if total_chars > max_extracted_chars:
+            # Byte/page limits do not bound a decompression bomb whose content
+            # streams expand to huge text; stop before materializing it all.
+            raise PdfTooLarge(
+                f"Extracted text exceeds the {max_extracted_chars}-character limit."
+            )
         page_texts.append(text)
 
-    return ExtractedPdf(page_count=page_count, page_texts=page_texts)
+    if failed_pages == page_count:
+        raise PdfMalformed("Failed to extract text from every page.")
+
+    return ExtractedPdf(
+        page_count=page_count, page_texts=page_texts, failed_page_count=failed_pages
+    )

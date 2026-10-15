@@ -7,13 +7,13 @@ license = { text = "Apache-2.0" }
 dependencies = [
     # Pinned-ish ranges; the exact resolved versions are recorded in the run
     # manifest at train time. Transformers >=4.51 is required for Qwen3.
-    "torch>=2.2",
+    "torch>=2.2,<3",
     "transformers>=4.51,<5",
     "peft>=0.11,<0.18",
     "datasets>=2.19,<4",
     "accelerate>=0.30,<2",
     "pydantic>=2.8,<3",
-    "numpy>=1.26",
+    "numpy>=1.26,<3",
 ]
 
 [project.optional-dependencies]
@@ -34,7 +34,18 @@ packages = ["veridoc_ft"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
+# Strict baseline: our own deprecations fail the suite; only the fast-moving ML
+# stack (which we don't control) is scope-ignored.
+filterwarnings = [
+    "error::DeprecationWarning",
+    "ignore::DeprecationWarning:transformers.*",
+    "ignore::DeprecationWarning:datasets.*",
+    "ignore::DeprecationWarning:torch.*",
+    "ignore::DeprecationWarning:peft.*",
+    "ignore::DeprecationWarning:accelerate.*",
+    # torch/accelerate/bitsandbytes emit many benign hardware/CPU UserWarnings.
+    "ignore::UserWarning",
+]
 
 [tool.ruff]
 line-length = 100
@@ -45,4 +56,16 @@ select = ["E", "F", "I", "UP", "B", "W"]
 
 [tool.mypy]
 python_version = "3.11"
+plugins = ["pydantic.mypy"]
+# Strong first-party checking. We deliberately do NOT enable `disallow_any_generics`
+# or `disallow_untyped_calls` (as services/ai does): this package wraps the untyped
+# torch/transformers/peft stack, so those checks would only force `type: ignore`
+# on every library call without catching real bugs. Everything else that finds
+# first-party mistakes is on.
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
 ignore_missing_imports = true

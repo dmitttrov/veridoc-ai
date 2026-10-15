@@ -112,8 +112,14 @@ async def ingest_pdf(
             data,
             max_bytes=settings.max_upload_bytes,
             max_pages=settings.max_pages,
+            max_extracted_chars=settings.max_extracted_chars,
             timeout_s=settings.pdf_parse_timeout_s,
         )
+        if extracted.failed_page_count:
+            logger.warning(
+                "extraction skipped %d of %d page(s) in document=%s",
+                extracted.failed_page_count, extracted.page_count, document_id,
+            )
 
         normalized_pages = [normalize_text(t) for t in extracted.page_texts]
 

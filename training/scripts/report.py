@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -34,9 +35,12 @@ def per_category(details: list[dict]) -> dict:
 def _fmt_cat(a: dict) -> str:
     value = "{}/{}".format(a["value"], a["nsup"]) if a["nsup"] else "-"
     abst = "{}/{}".format(a["abst_ok"], a["nuns"]) if a["nuns"] else "-"
-    return "n={:2d} schema={}/{} value_exact={} abstain_ok={}".format(
+    s = "n={:2d} schema={}/{} value_exact={} abstain_ok={}".format(
         a["n"], a["schema"], a["n"], value, abst
     )
+    if a["ninj"]:
+        s += " inj_ok={}/{}".format(a["inj_ok"], a["ninj"])
+    return s
 
 
 def main() -> None:
@@ -46,6 +50,12 @@ def main() -> None:
     ap.add_argument("--out", default="artifacts/comparison.json")
     args = ap.parse_args()
 
+    for p in (args.baseline, args.adapter):
+        if not Path(p).exists():
+            sys.exit(
+                f"{p} not found — produce it first with "
+                "`python -m veridoc_ft.realeval.evaluate ... --out {p}`."
+            )
     base = json.loads(Path(args.baseline).read_text())
     adapter = json.loads(Path(args.adapter).read_text())
 

@@ -8,12 +8,28 @@ snake_case field names. A shared `alias_generator` bridges the two so we
 never hand-maintain per-field aliases. Constrained fields use `Annotated`
 metadata (pydantic's recommended form when an alias generator is in play).
 """
+import uuid
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 CONTRACTS_VERSION = "0.1.0"
+
+
+def _ensure_uuid(value: str) -> str:
+    try:
+        uuid.UUID(value)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("must be a UUID string") from exc
+    return value
+
+
+# Document identifiers on the wire (mirrors @veridoc/contracts). Retrieval/RAG
+# require real UUIDs — they key straight into the DB, so a non-UUID must be a 422,
+# not a 500 — while chat accepts looser fixture ids but still bounds element size.
+DocumentId = Annotated[str, Field(min_length=1, max_length=64)]
+UuidDocumentId = Annotated[str, Field(min_length=1, max_length=64), AfterValidator(_ensure_uuid)]
 
 
 class CamelModel(BaseModel):
@@ -34,7 +50,7 @@ class ChatMessage(CamelModel):
 class ChatRequest(CamelModel):
     message: Annotated[str, Field(min_length=1, max_length=8000)]
     history: Annotated[list[ChatMessage], Field(default_factory=list, max_length=50)]
-    document_ids: Annotated[list[str], Field(default_factory=list, max_length=50)]
+    document_ids: Annotated[list[DocumentId], Field(default_factory=list, max_length=50)]
 
 
 class DocumentSummary(CamelModel):
@@ -131,7 +147,7 @@ class DocumentIngestionResult(CamelModel):
 
 class RetrievalRequest(CamelModel):
     query: Annotated[str, Field(min_length=1, max_length=2000)]
-    document_ids: Annotated[list[str], Field(default_factory=list, max_length=50)]
+    document_ids: Annotated[list[UuidDocumentId], Field(default_factory=list, max_length=50)]
     top_k: Annotated[int, Field(default=5, gt=0, le=50)]
     rerank: bool | None = None
 
@@ -169,6 +185,6 @@ class RetrievalResponse(CamelModel):
 
 class RagRequest(CamelModel):
     question: Annotated[str, Field(min_length=1, max_length=2000)]
-    document_ids: Annotated[list[str], Field(default_factory=list, max_length=50)]
+    document_ids: Annotated[list[UuidDocumentId], Field(default_factory=list, max_length=50)]
     top_k: Annotated[int, Field(default=5, gt=0, le=20)]
     rerank: bool | None = None

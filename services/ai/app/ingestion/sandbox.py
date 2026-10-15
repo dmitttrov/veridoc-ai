@@ -28,10 +28,12 @@ T = TypeVar("T")
 _MP_CONTEXT = multiprocessing.get_context("spawn")
 
 
-def _worker(data: bytes, max_bytes: int, max_pages: int) -> ExtractedPdf:
+def _worker(data: bytes, max_bytes: int, max_pages: int, max_extracted_chars: int) -> ExtractedPdf:
     # Runs in a child process. Expected rejections raise IngestionError
     # subclasses, which ProcessPoolExecutor pickles and re-raises in the parent.
-    return validate_and_extract(data, max_bytes=max_bytes, max_pages=max_pages)
+    return validate_and_extract(
+        data, max_bytes=max_bytes, max_pages=max_pages, max_extracted_chars=max_extracted_chars
+    )
 
 
 def _kill_workers(executor: ProcessPoolExecutor) -> None:
@@ -60,12 +62,17 @@ async def _run_in_process(fn: Callable[..., T], *args: object, timeout_s: float)
 
 
 async def extract_pdf_sandboxed(
-    data: bytes, *, max_bytes: int, max_pages: int, timeout_s: float
+    data: bytes,
+    *,
+    max_bytes: int,
+    max_pages: int,
+    max_extracted_chars: int = 20_000_000,
+    timeout_s: float,
 ) -> ExtractedPdf:
     """Validate + extract a PDF in a killable child process under a timeout."""
     try:
         return await _run_in_process(
-            _worker, data, max_bytes, max_pages, timeout_s=timeout_s
+            _worker, data, max_bytes, max_pages, max_extracted_chars, timeout_s=timeout_s
         )
     except TimeoutError as exc:
         raise PdfProcessingTimeout("PDF processing exceeded the time limit.") from exc

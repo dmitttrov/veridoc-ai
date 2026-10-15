@@ -8,9 +8,9 @@ Checks, per example:
   * conflicting examples carry two different values with the restatement cited;
   * unanswerable examples do NOT contain the asked metric in their evidence.
 
-Also classifies every example's evidence as:
-  (1) authentic filing excerpt, (2) XBRL-derived structured evidence,
-  (3) synthetic/templated prose. Reports counts honestly.
+Also classifies every example's evidence as either templated prose built from
+authoritative XBRL values (what the builder actually emits) or non-templated
+("would-be authentic") prose, and reports the counts honestly.
 
 Read-only: never rewrites questions/labels.
 """
@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 from veridoc_ft.realeval.dataset import METRICS, load_real
@@ -55,10 +56,15 @@ def classify_evidence(passage: str) -> int:
 
 
 def audit(data_path: str, raw_dir: str) -> dict:
+    if not Path(data_path).exists():
+        sys.exit(
+            f"{data_path} not found — build it first with "
+            "`python -m veridoc_ft.realeval.dataset --out data/realeval`."
+        )
     examples = load_real(data_path)
     raw = Path(raw_dir)
 
-    ev_cat = {1: 0, 2: 0, 3: 0}
+    ev_cat = {1: 0, 3: 0}
     cat_counts: dict[str, int] = {}
     failures: list[str] = []
     xbrl_checked = xbrl_ok = 0
@@ -90,7 +96,7 @@ def audit(data_path: str, raw_dir: str) -> dict:
                 failures.append(f"{ex.id}: period mismatch passage vs gold")
             # (c) cross-check against authoritative XBRL
             prov = ex.provenance
-            if prov.get("accession") and prov.get("period_end"):
+            if prov.get("accession") and prov.get("period_end") and prov.get("cik"):
                 xbrl_checked += 1
                 xv = _xbrl_value_for(
                     raw, prov["cik"], gold["metric"], prov["accession"], prov["period_end"]
@@ -123,9 +129,8 @@ def audit(data_path: str, raw_dir: str) -> dict:
         "n": len(examples),
         "category_counts": cat_counts,
         "evidence_classification": {
-            "authentic_filing_excerpt": ev_cat[1],
-            "xbrl_derived_structured": ev_cat[2],
             "synthetic_templated_prose": ev_cat[3],
+            "non_templated_prose": ev_cat[1],
         },
         "n_supported": n_supported,
         "value_in_cited_passage": f"{support_ok}/{n_supported}",

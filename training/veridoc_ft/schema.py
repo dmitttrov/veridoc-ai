@@ -33,8 +33,8 @@ class ExtractionResult(BaseModel):
     @model_validator(mode="after")
     def _check_invariant(self) -> ExtractionResult:
         if self.supported:
-            if self.value is None or self.evidence is None:
-                raise ValueError("supported=True requires non-null value and evidence")
+            if not (self.value or "").strip() or self.evidence is None:
+                raise ValueError("supported=True requires a non-empty value and non-null evidence")
         else:
             if any(x is not None for x in (self.value, self.unit, self.period, self.evidence)):
                 raise ValueError(
@@ -66,15 +66,23 @@ def parse_extraction(text: str) -> tuple[ExtractionResult | None, str]:
 
     Returns (result, status) where status is one of:
     "ok", "no_json", "invalid_json", "schema_invalid".
+
+    Scans each '{' with a balanced-object decoder and returns the first object
+    that decodes, so a valid object followed by trailing text containing braces
+    (a second object, a code fence, chat-template residue) still parses.
     """
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end == -1 or end < start:
+    idx = text.find("{")
+    if idx == -1:
         return None, "no_json"
-    blob = text[start : end + 1]
-    try:
-        data = json.loads(blob)
-    except json.JSONDecodeError:
+    decoder = json.JSONDecoder()
+    data = None
+    while idx != -1:
+        try:
+            data, _ = decoder.raw_decode(text, idx)
+            break
+        except json.JSONDecodeError:
+            idx = text.find("{", idx + 1)
+    if data is None:
         return None, "invalid_json"
     try:
         return ExtractionResult.model_validate(data), "ok"

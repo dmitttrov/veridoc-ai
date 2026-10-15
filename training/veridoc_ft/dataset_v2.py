@@ -20,6 +20,7 @@ import json
 import random
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 from veridoc_ft.dataset import (
     Example,
@@ -45,7 +46,7 @@ CASH_EQ = "cash and cash equivalents"
 OCF = "net cash from operating activities"
 
 
-def _result(**kwargs) -> dict:
+def _result(**kwargs: Any) -> dict:
     return ExtractionResult(**kwargs).model_dump()
 
 
@@ -66,14 +67,14 @@ def _billions(value_millions: int) -> tuple[str, str, str]:
     return f"${vstr} billion", vstr, "USD billions"
 
 
-def _rng(key: str) -> random.Random:
-    return random.Random(f"v2:{key}")
+def _rng(key: str, seed: int) -> random.Random:
+    return random.Random(f"{seed}:v2:{key}")
 
 
-def generate_v2_examples() -> list[Example]:
+def generate_v2_examples(seed: int = 20240601) -> list[Example]:
     out: list[Example] = []
     for company in V2_COMPANIES:
-        r = _rng(company)
+        r = _rng(company, seed)
 
         # --- negative net income (a loss) ---
         for period in (V2_PERIODS[0], V2_PERIODS[3]):
@@ -172,6 +173,8 @@ def generate_v2_examples() -> list[Example]:
         period = V2_PERIODS[4]
         orig = -(r.randint(100, 500) * 1_000_000)
         restated = -(r.randint(100, 500) * 1_000_000)
+        while restated == orig:  # a restatement must change the figure
+            restated = -(r.randint(100, 500) * 1_000_000)
         op, ov, ou = _money(orig)
         rp, rv, ru = _money(restated)
         out.append(Example(
@@ -208,7 +211,7 @@ def build(out_dir: str = "data/v2", seed: int = 20240601) -> dict:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    examples = _dedup(generate_examples(seed) + generate_v2_examples())
+    examples = _dedup(generate_examples(seed) + generate_v2_examples(seed))
     for ex in examples:
         validate_example(ex)
 

@@ -1,4 +1,35 @@
+import pytest
+
 from app.ingestion.chunk import chunk_page_text
+
+
+def test_invalid_size_and_overlap_rejected() -> None:
+    with pytest.raises(ValueError):
+        chunk_page_text("x", size=0)
+    with pytest.raises(ValueError):
+        chunk_page_text("x", size=10, overlap=10)  # overlap must be < size
+    with pytest.raises(ValueError):
+        chunk_page_text("x", size=10, overlap=-1)
+
+
+def test_single_overlong_word_forms_one_chunk() -> None:
+    # A token longer than `size` must still produce exactly one chunk (never split
+    # a word), even though its span exceeds `size`.
+    word = "x" * 50
+    chunks = chunk_page_text(word, size=10, overlap=5)
+    assert len(chunks) == 1
+    assert chunks[0].text == word
+    assert chunks[0].char_end - chunks[0].char_start == 50
+
+
+def test_large_overlap_still_terminates_and_progresses() -> None:
+    # overlap just below size is the worst case for the forward-progress guard.
+    text = " ".join(f"w{i}" for i in range(200))
+    chunks = chunk_page_text(text, size=100, overlap=99)
+    assert len(chunks) >= 2
+    assert [c.index for c in chunks] == list(range(len(chunks)))
+    for prev, nxt in zip(chunks, chunks[1:], strict=False):
+        assert nxt.char_start > prev.char_start  # always moves forward
 
 
 def test_empty_page_yields_no_chunks() -> None:

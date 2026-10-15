@@ -18,6 +18,8 @@ import hashlib
 import json
 import os
 import re
+import time
+import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import date
@@ -25,12 +27,27 @@ from pathlib import Path
 
 from veridoc_ft.prompt import marker_for
 
-# SEC's fair-access policy requires a descriptive User-Agent with a contact.
-# Configure it via the SEC_USER_AGENT env var (do NOT hardcode a personal
-# email in a public repo). The default is a non-identifying placeholder.
-SEC_UA = os.environ.get(
-    "SEC_USER_AGENT", "veridoc-ai-eval (set SEC_USER_AGENT to your contact)"
-)
+# SEC's fair-access policy requires a descriptive User-Agent with a contact and
+# caps clients at ~10 req/s. Configure it via SEC_USER_AGENT (do NOT hardcode a
+# personal email in a public repo). We refuse to fetch with the placeholder.
+_UA_PLACEHOLDER = "veridoc-ai-eval (set SEC_USER_AGENT to your contact)"
+SEC_UA = os.environ.get("SEC_USER_AGENT", _UA_PLACEHOLDER)
+_REQUEST_DELAY_S = 0.15  # stay well under SEC's 10 req/s fair-access cap
+
+
+def _require_contact_ua() -> str:
+    """Return a valid contact User-Agent or fail loudly before any network call.
+
+    SEC blocks non-contact traffic; running with the placeholder would get the
+    shared project IP throttled, so we refuse rather than send it.
+    """
+    ua = os.environ.get("SEC_USER_AGENT", "").strip()
+    if not ua or ua == _UA_PLACEHOLDER or "@" not in ua:
+        raise RuntimeError(
+            "SEC fair-access policy requires a contact User-Agent. Set "
+            "SEC_USER_AGENT='Your Name your@email.com' before building the real-eval set."
+        )
+    return ua
 
 COMPANIES = [
     ("Apple Inc.", "0000320193"),
@@ -65,25 +82,47 @@ class RealExample:
     provenance: dict
 
 
-def fetch_concept(cik: str, tag: str) -> dict | None:
+def fetch_concept(cik: str, tag: str, ua: str | None = None, *, retries: int = 4) -> dict | None:
+    """Fetch one XBRL concept. Returns None only when the concept legitimately
+    does not exist (HTTP 404); transient errors (429/5xx/network/JSON) are retried
+    with exponential backoff and then RAISED, so a degraded run cannot silently
+    masquerade as a smaller-but-clean benchmark."""
+    ua = ua or _require_contact_ua()
     url = f"https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}/us-gaap/{tag}.json"
-    req = urllib.request.Request(url, headers={"User-Agent": SEC_UA})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
-            return json.loads(resp.read().decode("utf-8"))
-    except Exception:
-        return None
+    req = urllib.request.Request(url, headers={"User-Agent": ua})
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+                data: dict = json.loads(resp.read().decode("utf-8"))
+                return data
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None  # concept absent for this company — expected
+            if exc.code in (403, 429, 500, 502, 503, 504) and attempt < retries - 1:
+                retry_after = exc.headers.get("Retry-After") if exc.headers else None
+                delay = float(retry_after) if retry_after and retry_after.isdigit() else 2**attempt
+                time.sleep(delay)
+                continue
+            raise
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            if attempt < retries - 1:
+                time.sleep(2**attempt)
+                continue
+            raise
+    return None
 
 
 def fetch_all(out_raw: Path) -> dict:
     """Fetch every (company, metric) concept once, cache raw JSON to disk."""
+    ua = _require_contact_ua()
     out_raw.mkdir(parents=True, exist_ok=True)
     facts: dict = {}
     for name, cik in COMPANIES:
         facts[cik] = {"name": name, "metrics": {}}
         for metric, tags in METRICS.items():
             for tag in tags:
-                data = fetch_concept(cik, tag)
+                time.sleep(_REQUEST_DELAY_S)  # fair-access rate limit
+                data = fetch_concept(cik, tag, ua)
                 if data and data.get("units", {}).get("USD"):
                     (out_raw / f"{cik}_{tag}.json").write_text(json.dumps(data))
                     facts[cik]["metrics"][metric] = {"tag": tag, "data": data}

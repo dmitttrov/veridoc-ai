@@ -16,6 +16,7 @@ import json
 import random
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 from veridoc_ft.prompt import marker_for
 from veridoc_ft.schema import ExtractionResult
@@ -113,7 +114,7 @@ def _distractor(rng: random.Random, exclude_key: str) -> str:
     return _fmt(other, company, period, _value_for(rng, other))
 
 
-def _result(**kwargs) -> dict:
+def _result(**kwargs: Any) -> dict:
     return ExtractionResult(**kwargs).model_dump()
 
 
@@ -172,6 +173,8 @@ def generate_examples(seed: int = 20240601) -> list[Example]:
             period = rng.choice(PERIODS)
             original = _value_for(frng2, tpl)
             restated = _value_for(frng2, tpl)
+            while restated == original:  # a restatement must change the figure
+                restated = _value_for(frng2, tpl)
             orig_passage = _fmt(tpl, company, period, original)
             restated_passage = (
                 f"Restatement: {company} {tpl.name} for {period} was restated to "

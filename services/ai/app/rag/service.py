@@ -62,6 +62,7 @@ def verify_citations(
     valid_markers: list[str] = []
     invalid_count = 0
     seen_valid: set[str] = set()
+    seen_invalid: set[str] = set()
     cleaned = answer_text
 
     for marker in emitted:
@@ -69,9 +70,11 @@ def verify_citations(
             if marker not in seen_valid:
                 seen_valid.add(marker)
                 valid_markers.append(marker)
-        else:
+        elif marker not in seen_invalid:
+            # Count each distinct fabricated marker once (the replace below
+            # already strips every occurrence of it from the answer).
+            seen_invalid.add(marker)
             invalid_count += 1
-            # Remove the fabricated marker token from the displayed answer.
             cleaned = cleaned.replace(f"[{marker}]", "")
 
     citations: list[Citation] = []
@@ -89,7 +92,9 @@ def verify_citations(
                 marker=marker,
             )
         )
-    return re.sub(r"\s{2,}", " ", cleaned).strip(), citations, invalid_count
+    # Collapse only runs of spaces/tabs left by stripped inline markers; keep
+    # newlines so multi-line / bulleted answers are not flattened to one line.
+    return re.sub(r"[ \t]{2,}", " ", cleaned).strip(), citations, invalid_count
 
 
 async def answer_question(
