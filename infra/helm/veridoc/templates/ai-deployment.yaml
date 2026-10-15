@@ -1,0 +1,126 @@
+{{- if .Values.ai.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "veridoc.ai.fullname" . }}
+  labels:
+    {{- include "veridoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ai
+spec:
+  {{- if not .Values.ai.autoscaling.enabled }}
+  replicas: {{ .Values.ai.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "veridoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ai
+  template:
+    metadata:
+      labels:
+        {{- include "veridoc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ai
+    spec:
+      serviceAccountName: {{ include "veridoc.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.ai.terminationGracePeriodSeconds }}
+      {{- if eq .Values.migrations.strategy "init" }}
+      # Run idempotent, advisory-locked migrations before the server starts.
+      initContainers:
+        - name: migrate
+          image: {{ include "veridoc.image" (dict "root" . "image" .Values.ai.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          command: ["python", "-m", "app.db.migrate"]
+          env:
+            - name: AI_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "veridoc.db.secretName" . }}
+                  key: {{ include "veridoc.db.secretKey" . }}
+      {{- end }}
+      containers:
+        - name: ai
+          image: {{ include "veridoc.image" (dict "root" . "image" .Values.ai.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          # Serve only (migrations run via initContainer / hook / manually),
+          # with a graceful-shutdown window so in-flight SSE streams drain.
+          command:
+            - uvicorn
+            - app.main:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - {{ .Values.ai.port | quote }}
+            - --timeout-graceful-shutdown
+            - "30"
+          ports:
+            - name: http
+              containerPort: {{ .Values.ai.port }}
+          env:
+            - name: AI_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "veridoc.db.secretName" . }}
+                  key: {{ include "veridoc.db.secretKey" . }}
+            {{- if include "veridoc.inference.enabled" . }}
+            - name: AI_INFERENCE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "veridoc.inference.secretName" . }}
+                  key: {{ include "veridoc.inference.secretKey" . }}
+            {{- end }}
+            {{- range $k, $v := .Values.ai.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Generous startup window: covers model load (and DB warmup when a real
+          # embedding/reranker model is enabled).
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
+          resources:
+            {{- toYaml .Values.ai.resources | nindent 12 }}
+      {{- with .Values.ai.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ai.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ai.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

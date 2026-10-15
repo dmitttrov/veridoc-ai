@@ -1,0 +1,215 @@
+# Default values for the Veridoc AI chart.
+# Defaults are demo/dev-friendly (bundled Postgres, HTTP, no autoscaling) and
+# scale up to production via the toggles below (external DB, TLS ingress, HPA,
+# NetworkPolicy, PodDisruptionBudget).
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ---------------------------------------------------------------------------
+# Container images. All three services share a registry + owner; the tag
+# defaults to .Chart.AppVersion when image.tag is empty.
+#   ghcr.io/<owner>/<service.image>:<tag>
+# Published by .github/workflows/release.yml.
+# ---------------------------------------------------------------------------
+image:
+  registry: ghcr.io
+  owner: dmitttrov # TODO: your GHCR owner (github.repository_owner)
+  pullPolicy: IfNotPresent
+  tag: "" # empty => Chart.AppVersion
+
+# Pull secrets for private GHCR images (public images need none).
+imagePullSecrets: []
+#  - name: ghcr-pull
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Pod/container hardening applied to the three app workloads (not Postgres,
+# which needs to start as root to initialise its data dir).
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: ["ALL"]
+
+# Public browser origin used for the API gateway's CORS allow-list (WEB_ORIGIN).
+# MUST match how the browser reaches the web app. With the default same-origin
+# ingress setup this is the ingress URL, e.g. https://veridoc.example.com.
+webOrigin: "http://localhost"
+
+# ---------------------------------------------------------------------------
+# API gateway (NestJS) — the public edge.
+# ---------------------------------------------------------------------------
+api:
+  enabled: true
+  image: veridoc-api
+  replicas: 2
+  port: 3000
+  # Extra environment (all optional; the gateway has validated defaults).
+  env:
+    AI_REQUEST_TIMEOUT_MS: "30000"
+    AI_INGEST_TIMEOUT_MS: "120000"
+    AI_HEALTH_TIMEOUT_MS: "2000"
+    RATE_LIMIT_TTL_MS: "60000"
+    RATE_LIMIT_MAX: "100"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  # SSE streams need time to drain on shutdown.
+  terminationGracePeriodSeconds: 40
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ---------------------------------------------------------------------------
+# AI service (FastAPI) — internal only; never exposed via the ingress.
+# ---------------------------------------------------------------------------
+ai:
+  enabled: true
+  image: veridoc-ai
+  replicas: 1
+  port: 8000
+  env:
+    AI_INFERENCE_PROVIDER: mock
+    AI_MODEL_NAME: veridoc-mock-0.1
+    AI_EMBEDDING_PROVIDER: deterministic
+    AI_RERANKER_PROVIDER: deterministic
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  terminationGracePeriodSeconds: 45
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ---------------------------------------------------------------------------
+# Web SPA (nginx) — static assets with runtime config injection.
+# ---------------------------------------------------------------------------
+web:
+  enabled: true
+  image: veridoc-web
+  replicas: 2
+  port: 8080
+  # Browser-reachable gateway URL, injected at runtime (window.__VERIDOC_ENV__).
+  # Empty => same-origin "/api" via the ingress (recommended). Set an absolute
+  # URL (https://api.example.com) only when the gateway is on a different host.
+  apiBaseUrl: ""
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ---------------------------------------------------------------------------
+# Database schema migrations. The AI image can run them idempotently (they are
+# advisory-locked and multi-replica safe).
+#   init  (default) — an initContainer runs migrations before each AI pod serves.
+#   hook            — a Helm pre-install/pre-upgrade Job (requires an ALWAYS
+#                     available DB, i.e. externalDatabase; not the bundled one).
+#   none            — you run migrations yourself.
+# ---------------------------------------------------------------------------
+migrations:
+  strategy: init
+
+# ---------------------------------------------------------------------------
+# Bundled PostgreSQL + pgvector (demo/dev). For production, prefer an external
+# managed database: set postgresql.enabled=false and externalDatabase below.
+# ---------------------------------------------------------------------------
+postgresql:
+  enabled: true
+  image:
+    repository: pgvector/pgvector
+    tag: pg16
+    # Pinned by digest for reproducibility (matches docker-compose).
+    digest: sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a
+    pullPolicy: IfNotPresent
+  auth:
+    username: veridoc
+    database: veridoc
+    # Leave empty to auto-generate a password (preserved across upgrades via a
+    # lookup of the existing Secret). Set explicitly, or use externalDatabase.
+    password: ""
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# Used only when postgresql.enabled=false. Provide a full connection string
+# (postgresql://user:pass@host:5432/db, pgvector extension available), OR point
+# at an existing Secret you manage.
+externalDatabase:
+  url: ""
+  existingSecret: ""
+  existingSecretKey: "url"
+
+# ---------------------------------------------------------------------------
+# Secrets for the AI service's optional OpenAI-compatible inference provider.
+# ---------------------------------------------------------------------------
+secrets:
+  inferenceApiKey: ""
+  existingSecret: ""
+  existingSecretKey: "inference-api-key"
+
+# ---------------------------------------------------------------------------
+# Ingress. Routes "/api" to the gateway and "/" to the web SPA on one host, so
+# the SPA's default same-origin apiBaseUrl works.
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: veridoc.local
+  tls:
+    enabled: false
+    secretName: ""
+
+# NetworkPolicy: restrict the AI service to the gateway, and the DB to the AI
+# service (mirrors the "AI is internal-only" design).
+networkPolicy:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1

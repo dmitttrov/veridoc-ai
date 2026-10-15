@@ -1,0 +1,52 @@
+{{- if eq .Values.migrations.strategy "hook" }}
+# Pre-install/pre-upgrade migration Job. Requires an ALWAYS-available database
+# (externalDatabase), because Helm runs this hook before the main-phase resources
+# (so the bundled Postgres StatefulSet does not exist yet). Use migrations.strategy
+# "init" for the bundled database.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-migrate" (include "veridoc.fullname" .) }}
+  labels:
+    {{- include "veridoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "veridoc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "veridoc.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "veridoc.image" (dict "root" . "image" .Values.ai.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          command: ["python", "-m", "app.db.migrate"]
+          env:
+            - name: AI_DATABASE_URL
+              {{- if .Values.externalDatabase.existingSecret }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalDatabase.existingSecret }}
+                  key: {{ default "url" .Values.externalDatabase.existingSecretKey }}
+              {{- else if .Values.externalDatabase.url }}
+              value: {{ .Values.externalDatabase.url | quote }}
+              {{- else }}
+              {{- fail "migrations.strategy=hook requires externalDatabase.url or externalDatabase.existingSecret; use strategy=init for the bundled database" }}
+              {{- end }}
+{{- end }}
