@@ -11,6 +11,10 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Runtime config (window.__VERIDOC_ENV__). The container regenerates this
+         per environment at startup (see infra/docker/web-env.sh); must load
+         before the app bundle. -->
+    <script src="/env.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

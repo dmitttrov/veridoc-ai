@@ -137,3 +137,23 @@ jobs:
           # Don't fail on CVEs with no fix available yet (noise); re-scan picks
           # them up once a fixed base image or dependency is released.
           ignore-unfixed: true
+
+  helm:
+    name: Helm chart (lint + template)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint
+        run: helm lint infra/helm/veridoc
+      - name: Template (bundled Postgres defaults)
+        run: helm template veridoc infra/helm/veridoc > /dev/null
+      - name: Template (external DB + production toggles)
+        run: |
+          helm template veridoc infra/helm/veridoc \
+            --set postgresql.enabled=false \
+            --set externalDatabase.url=postgresql://u:p@db.example:5432/veridoc \
+            --set ingress.enabled=true \
+            --set api.autoscaling.enabled=true \
+            --set networkPolicy.enabled=true \
+            --set podDisruptionBudget.enabled=true > /dev/null

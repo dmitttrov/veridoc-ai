@@ -26,7 +26,12 @@ RUN pip install --no-deps .
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser /app
 USER appuser
 
+# Serve port is configurable. The Helm chart overrides this command to split
+# migrations into an initContainer; docker-compose uses the default below.
+ENV AI_PORT=8000
 EXPOSE 8000
 
-# Apply any pending migrations, then serve. (Idempotent; safe to re-run.)
-CMD ["sh", "-c", "python -m app.db.migrate && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Apply any pending migrations, then serve. Migrations are idempotent and
+# advisory-locked (safe to re-run and multi-replica safe). The graceful-shutdown
+# window lets in-flight SSE streams drain on SIGTERM.
+CMD ["sh", "-c", "python -m app.db.migrate && uvicorn app.main:app --host 0.0.0.0 --port ${AI_PORT:-8000} --timeout-graceful-shutdown 30"]
