@@ -5,24 +5,26 @@ description = "Veridoc AI inference service (FastAPI). Deterministic mock provid
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 dependencies = [
-    "fastapi>=0.115,<0.116",
-    "uvicorn[standard]>=0.30,<0.35",
+    "fastapi>=0.124,<0.129",
+    # Pinned floor for CVE-2025-62727 (DoS); kept below starlette 1.x.
+    "starlette>=0.49.1,<0.51",
+    "uvicorn[standard]>=0.30,<0.55",
     "pydantic>=2.8,<3",
     "pydantic-settings>=2.4,<3",
     "python-multipart>=0.0.9,<0.1",
-    "asyncpg>=0.29,<0.31",
+    "asyncpg>=0.29,<0.33",
     "pgvector>=0.3.2,<0.4",
-    "pypdf>=4.3,<6",
+    "pypdf>=6.17.0,<7",
     "httpx>=0.27,<0.29",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3,<9",
-    "pytest-asyncio>=0.24,<0.25",
+    "pytest-asyncio>=0.24,<1.5",
     "httpx>=0.27,<0.29",
     "ruff>=0.6,<0.9",
-    "mypy>=1.11,<2",
+    "mypy>=1.11,<3",
     "reportlab>=4.2,<5",
 ]
 # Real local embedding model. Heavy (torch); install only when you want to run

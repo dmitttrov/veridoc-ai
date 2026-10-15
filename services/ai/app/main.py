@@ -86,8 +86,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # mock path. Degrade gracefully if it is unavailable so the mock keeps
     # working; ingestion/retrieval endpoints then return 503.
     app.state.pool = None
+    pool = None
     try:
-        app.state.pool = await create_pool(settings)
+        pool = await create_pool(settings)
+        app.state.pool = pool
         logger.info("database pool ready")
     except Exception as exc:  # noqa: BLE001 - startup must not hard-fail
         logger.warning("database unavailable; ingestion/retrieval disabled (%s)", exc)
@@ -104,8 +106,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        if app.state.pool is not None:
-            await app.state.pool.close()
+        # Close the pool THIS lifespan created — not app.state.pool, which tests
+        # swap (to a fake or None) to exercise degraded paths. Closing the local
+        # reference guarantees the real pool's connections are released even when
+        # app.state.pool has been replaced, avoiding leaked asyncpg connections.
+        if pool is not None:
+            await pool.close()
         aclose = getattr(app.state.provider, "aclose", None)
         if aclose is not None:
             await aclose()
