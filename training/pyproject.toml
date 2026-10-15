@@ -69,3 +69,11 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# transformers 5 ships `py.typed`, so mypy began type-checking our calls into the
+# ML stack (e.g. `TrainingArguments(warmup_ratio=...)`) against incomplete stubs.
+# Per the note above we treat this fast-moving, effectively-untyped stack as
+# opaque — skip following its stubs rather than scatter `type: ignore` everywhere.
+module = ["torch.*", "transformers.*", "peft.*", "datasets.*", "accelerate.*"]
+follow_imports = "skip"
