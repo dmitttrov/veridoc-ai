@@ -52,6 +52,29 @@ def test_readyz_ok_when_db_reachable() -> None:
     assert resp.json()["status"] == "ok"
 
 
+def test_lifespan_closes_created_pool_even_when_state_pool_swapped(monkeypatch) -> None:
+    # Regression: the lifespan must close the pool IT created, even if a test (or
+    # caller) swaps app.state.pool afterwards. Otherwise the real asyncpg pool is
+    # orphaned and its connections leak, surfacing as a ResourceWarning at GC
+    # (which pytest's unraisableexception + filterwarnings=error turns into a
+    # failure in whatever test happens to be running).
+    closed = {"value": False}
+
+    class _TrackingPool(_FakePool):
+        async def close(self) -> None:
+            closed["value"] = True
+
+    async def _fake_create_pool(_settings: object) -> _TrackingPool:
+        return _TrackingPool()
+
+    monkeypatch.setattr("app.main.create_pool", _fake_create_pool)
+    with TestClient(app) as client:
+        # Mimic the degraded-path swap the other readiness tests perform.
+        app.state.pool = None
+        client.get("/health")
+    assert closed["value"] is True
+
+
 def test_request_id_is_generated_and_echoed() -> None:
     with TestClient(app) as client:
         generated = client.get("/health")
