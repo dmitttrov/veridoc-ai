@@ -8,10 +8,12 @@ dependencies = [
     # Pinned-ish ranges; the exact resolved versions are recorded in the run
     # manifest at train time. Transformers >=4.51 is required for Qwen3.
     "torch>=2.2,<3",
-    "transformers>=4.51,<6",
-    # peft >=0.18 is required for transformers 5 (older peft imports the removed
-    # transformers.HybridCache). Supersedes Dependabot #13.
-    "peft>=0.18,<0.22",
+    # Pinned below transformers 5: v5 removed TrainingArguments.warmup_ratio and
+    # transformers.HybridCache (which older peft imports), breaking the LoRA
+    # trainer + smoke test. Reverts Dependabot #10; the v5 migration is tracked
+    # separately (needs the new warmup API + peft>=0.18).
+    "transformers>=4.51,<5",
+    "peft>=0.11,<0.18",
     "datasets>=2.19,<6",
     "accelerate>=0.30,<2",
     "pydantic>=2.8,<3",
@@ -71,11 +73,3 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-# transformers 5 ships `py.typed`, so mypy began type-checking our calls into the
-# ML stack (e.g. `TrainingArguments(warmup_ratio=...)`) against incomplete stubs.
-# Per the note above we treat this fast-moving, effectively-untyped stack as
-# opaque — skip following its stubs rather than scatter `type: ignore` everywhere.
-module = ["torch.*", "transformers.*", "peft.*", "datasets.*", "accelerate.*"]
-follow_imports = "skip"
