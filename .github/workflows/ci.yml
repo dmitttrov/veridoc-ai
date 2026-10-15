@@ -15,7 +15,7 @@ jobs:
     name: Node (contracts, api, web)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -63,7 +63,7 @@ jobs:
       # Enables the DB-backed integration tests (skipped when unset).
       VERIDOC_TEST_DATABASE_URL: postgresql://veridoc:veridoc@localhost:5432/veridoc
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -96,7 +96,7 @@ jobs:
       run:
         working-directory: training
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -124,11 +124,11 @@ jobs:
           - { name: ai, dockerfile: infra/docker/ai.Dockerfile }
           - { name: web, dockerfile: infra/docker/web.Dockerfile }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build ${{ matrix.name }} image
         run: docker build -f ${{ matrix.dockerfile }} -t veridoc-${{ matrix.name }}:ci .
       - name: Scan ${{ matrix.name }} image (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: veridoc-${{ matrix.name }}:ci
           format: table
