@@ -8,7 +8,7 @@ dependencies = [
     # Pinned-ish ranges; the exact resolved versions are recorded in the run
     # manifest at train time. Transformers >=4.51 is required for Qwen3.
     "torch>=2.2,<3",
-    "transformers>=4.51,<5",
+    "transformers>=4.51,<6",
     "peft>=0.11,<0.18",
     "datasets>=2.19,<6",
     "accelerate>=0.30,<2",
