@@ -1,0 +1,106 @@
+# Local development stack for the Phase 1 vertical slice.
+# Runs with no GPU and no paid services.
+#
+# Topology:
+#   web (nginx, static)  ->  published on host :5173
+#   api (NestJS gateway) ->  published on host :3000  (the public edge)
+#   ai  (FastAPI)        ->  INTERNAL ONLY, no host port (see SECURITY.md)
+#   db  (postgres+pgvector) -> INTERNAL ONLY, no host port
+#
+# The AI service runs pending migrations on start, then serves.
+#
+# The DB password defaults to "veridoc" for zero-config local dev. Override it
+# by setting POSTGRES_PASSWORD in the environment (or an infra/.env file) — the
+# DB and the AI service's connection URL both read the same variable.
+
+services:
+  db:
+    # Pinned by digest for reproducible builds (pgvector/pgvector:pg16).
+    image: pgvector/pgvector:pg16@sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a
+    environment:
+      POSTGRES_USER: veridoc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-veridoc}
+      POSTGRES_DB: veridoc
+    # Internal only — no host port published.
+    expose:
+      - "5432"
+    volumes:
+      - veridoc_pgdata:/var/lib/postgresql/data
+    networks:
+      - veridoc
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U veridoc -d veridoc"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ai:
+    build:
+      context: ..
+      dockerfile: infra/docker/ai.Dockerfile
+    environment:
+      AI_INFERENCE_PROVIDER: mock
+      AI_MODEL_NAME: veridoc-mock-0.1
+      AI_DATABASE_URL: postgresql://veridoc:${POSTGRES_PASSWORD:-veridoc}@db:5432/veridoc
+      AI_EMBEDDING_PROVIDER: deterministic
+      AI_RERANKER_PROVIDER: deterministic
+    # No `ports:` mapping — the AI service is reachable only on the internal
+    # network, by the gateway. Do not expose it to the host or the internet.
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - veridoc
+    # Gate dependents on READINESS (DB reachable), not liveness: /readyz returns
+    # 503 when the pool is down, so a DB outage marks this container unhealthy
+    # instead of shipping as green. start_period covers DB connect + migrations.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz')"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/docker/api.Dockerfile
+    environment:
+      PORT: "3000"
+      AI_SERVICE_URL: http://ai:8000
+      WEB_ORIGIN: http://localhost:5173
+      AI_REQUEST_TIMEOUT_MS: "30000"
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      ai:
+        condition: service_healthy
+    networks:
+      - veridoc
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:3000
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    networks:
+      - veridoc
+
+volumes:
+  veridoc_pgdata:
+
+networks:
+  veridoc:
+    driver: bridge

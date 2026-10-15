@@ -1,0 +1,23 @@
+{
+  "name": "veridoc-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Veridoc AI — open-source financial document intelligence platform (monorepo)",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:contracts": "npm run build --workspace @veridoc/contracts",
+    "build": "npm run build:contracts && npm run build --workspace @veridoc/api && npm run build --workspace @veridoc/web",
+    "dev:web": "npm run dev --workspace @veridoc/web",
+    "dev:api": "npm run start:dev --workspace @veridoc/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}

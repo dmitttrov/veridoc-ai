@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # JS monorepo (npm workspaces share the root lockfile).
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Deployable AI service (pyproject + hash-pinned lockfiles).
+  - package-ecosystem: pip
+    directory: "/services/ai"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Training package (range-pinned; torch/CUDA matrix not lockfile-pinned).
+  - package-ecosystem: pip
+    directory: "/training"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # GitHub Actions used by CI.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

@@ -1,0 +1,190 @@
+"""Pydantic models mirroring `@veridoc/contracts`.
+
+These are intentionally kept in lock-step with the TypeScript zod schemas.
+Any change here must be reflected in packages/contracts/src/index.ts.
+
+Wire format is camelCase (matching the TS contract); Python code uses
+snake_case field names. A shared `alias_generator` bridges the two so we
+never hand-maintain per-field aliases. Constrained fields use `Annotated`
+metadata (pydantic's recommended form when an alias generator is in play).
+"""
+import uuid
+from typing import Annotated, Literal
+
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
+
+CONTRACTS_VERSION = "0.1.0"
+
+
+def _ensure_uuid(value: str) -> str:
+    try:
+        uuid.UUID(value)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("must be a UUID string") from exc
+    return value
+
+
+# Document identifiers on the wire (mirrors @veridoc/contracts). Retrieval/RAG
+# require real UUIDs — they key straight into the DB, so a non-UUID must be a 422,
+# not a 500 — while chat accepts looser fixture ids but still bounds element size.
+DocumentId = Annotated[str, Field(min_length=1, max_length=64)]
+UuidDocumentId = Annotated[str, Field(min_length=1, max_length=64), AfterValidator(_ensure_uuid)]
+
+
+class CamelModel(BaseModel):
+    """Base model: camelCase on the wire, snake_case in Python."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        protected_namespaces=(),  # allow a field literally named `model`
+    )
+
+
+class ChatMessage(CamelModel):
+    role: Literal["user", "assistant"]
+    content: Annotated[str, Field(min_length=1, max_length=8000)]
+
+
+class ChatRequest(CamelModel):
+    message: Annotated[str, Field(min_length=1, max_length=8000)]
+    history: Annotated[list[ChatMessage], Field(default_factory=list, max_length=50)]
+    document_ids: Annotated[list[DocumentId], Field(default_factory=list, max_length=50)]
+
+
+class DocumentSummary(CamelModel):
+    id: str
+    title: str
+    issuer: str
+    period: str
+    page_count: Annotated[int, Field(gt=0)]
+
+
+class Citation(CamelModel):
+    document_id: str
+    document_title: str
+    page: Annotated[int, Field(gt=0)]
+    snippet: Annotated[str, Field(min_length=1)]
+    # Phase 3 (grounded RAG): traceability to exact stored evidence.
+    chunk_id: str | None = None
+    char_start: int | None = None
+    char_end: int | None = None
+    marker: str | None = None
+
+
+# --- Streaming events (discriminated union on `type`) ----------------------
+
+
+class TokenEvent(CamelModel):
+    type: Literal["token"] = "token"
+    text: str
+
+
+class CitationsEvent(CamelModel):
+    type: Literal["citations"] = "citations"
+    citations: list[Citation]
+
+
+class DoneEvent(CamelModel):
+    type: Literal["done"] = "done"
+    mock: bool
+    model: str
+    token_count: Annotated[int, Field(ge=0)]
+    # Phase 3 (grounded RAG) optional fields.
+    abstained: bool | None = None
+    invalid_citation_count: int | None = None
+
+
+class ErrorEvent(CamelModel):
+    type: Literal["error"] = "error"
+    message: str
+    code: str
+
+
+ChatStreamEvent = Annotated[
+    TokenEvent | CitationsEvent | DoneEvent | ErrorEvent,
+    Field(discriminator="type"),
+]
+
+
+class HealthStatus(CamelModel):
+    status: Literal["ok", "degraded"]
+    service: str
+    version: str
+    mock: bool | None = None
+
+
+# --- Phase 2: ingestion ----------------------------------------------------
+
+IngestionState = Literal["pending", "running", "succeeded", "failed"]
+
+
+class StoredDocument(CamelModel):
+    id: str
+    title: str
+    filename: str
+    page_count: int = Field(ge=0)
+    chunk_count: int = Field(ge=0)
+    size_bytes: int = Field(ge=0)
+
+
+class DocumentIngestionResult(CamelModel):
+    document_id: str
+    filename: str
+    content_hash: str
+    mime_type: str
+    size_bytes: int = Field(ge=0)
+    page_count: int = Field(ge=0)
+    chunk_count: int = Field(ge=0)
+    state: IngestionState
+    already_ingested: bool
+    error: str | None = None
+
+
+# --- Phase 2: retrieval ----------------------------------------------------
+
+
+class RetrievalRequest(CamelModel):
+    query: Annotated[str, Field(min_length=1, max_length=2000)]
+    document_ids: Annotated[list[UuidDocumentId], Field(default_factory=list, max_length=50)]
+    top_k: Annotated[int, Field(default=5, gt=0, le=50)]
+    rerank: bool | None = None
+
+
+class RetrievalScores(CamelModel):
+    lexical: float
+    semantic: float
+    fused: float
+    rerank: float | None = None
+
+
+class RetrievedPassage(CamelModel):
+    chunk_id: str
+    document_id: str
+    document_title: str
+    page: int = Field(gt=0)
+    text: str
+    char_start: int = Field(ge=0)
+    char_end: int = Field(ge=0)
+    scores: RetrievalScores
+    citation: str
+
+
+class RetrievalResponse(CamelModel):
+    query: str
+    passages: list[RetrievedPassage]
+    embedding_model: str
+    embedding_dim: int = Field(gt=0)
+    reranked: bool = False
+    reranker_model: str | None = None
+
+
+# --- Phase 3: grounded RAG -------------------------------------------------
+
+
+class RagRequest(CamelModel):
+    question: Annotated[str, Field(min_length=1, max_length=2000)]
+    document_ids: Annotated[list[UuidDocumentId], Field(default_factory=list, max_length=50)]
+    top_k: Annotated[int, Field(default=5, gt=0, le=20)]
+    rerank: bool | None = None

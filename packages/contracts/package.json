@@ -1,0 +1,26 @@
+{
+  "name": "@veridoc/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared, versioned API contracts (types + zod schemas) for Veridoc AI.",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.10",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
+  }
+}
