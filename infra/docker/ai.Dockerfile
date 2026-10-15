@@ -22,6 +22,10 @@ COPY services/ai/pyproject.toml ./
 COPY services/ai/app ./app
 RUN pip install --no-deps .
 
+# Patch the setuptools-vendored jaraco.context (CVE-2026-23949) that ships in the
+# base image. The runtime builds nothing, but Trivy scans installed site-packages.
+RUN pip install --no-cache-dir --upgrade setuptools
+
 # Drop privileges: create and switch to a non-root user (never run as root).
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser /app
 USER appuser
