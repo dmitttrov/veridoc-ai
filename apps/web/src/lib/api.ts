@@ -15,8 +15,27 @@ import {
 import { z } from 'zod';
 import { parseSseStream } from './sse';
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? 'http://localhost:3000';
+/**
+ * Resolve the gateway base URL, in priority order:
+ *   1. Runtime config the container injects at startup (window.__VERIDOC_ENV__,
+ *      served as /env.js) — lets one built image serve any environment.
+ *   2. Build-time VITE_API_BASE_URL (the Vite dev server).
+ *   3. A local-dev default.
+ * An explicit empty string means "same origin" — requests go to /api/... behind
+ * an ingress that routes /api to the gateway — so unset must be distinguished
+ * from "" (hence the `!== undefined` check rather than `??`).
+ */
+function resolveApiBaseUrl(): string {
+  const runtime = (globalThis as { __VERIDOC_ENV__?: { API_BASE_URL?: string } })
+    .__VERIDOC_ENV__?.API_BASE_URL;
+  const base =
+    runtime !== undefined
+      ? runtime
+      : (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000');
+  return base.replace(/\/$/, '');
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 /**
  * Parse a JSON response against the shared contract. Responses are untrusted
