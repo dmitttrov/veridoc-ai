@@ -89,10 +89,14 @@ services:
     build:
       context: ..
       dockerfile: infra/docker/web.Dockerfile
-      args:
-        VITE_API_BASE_URL: http://localhost:3000
+    environment:
+      # Runtime config injected into the SPA (window.__VERIDOC_ENV__). The browser
+      # reaches the gateway on the host-published port, so this is localhost:3000
+      # (not the internal "api" service name).
+      API_BASE_URL: http://localhost:3000
+    # The unprivileged nginx image listens on :8080 inside the container.
     ports:
-      - "5173:80"
+      - "5173:8080"
     depends_on:
       - api
     networks:
