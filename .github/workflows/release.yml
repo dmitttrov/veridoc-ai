@@ -1,13 +1,16 @@
 name: Release
 
 # Publishes versioned container images to GHCR so the Helm chart can pull them.
-#   - push to main            -> tags: sha-<short>, edge
-#   - push tag vX.Y.Z         -> tags: X.Y.Z, X.Y, latest
+#   - push tag vX.Y.Z         -> tags: X.Y.Z, X.Y, latest, sha-<short>
+#   - manual dispatch         -> tags: sha-<short>, edge
 # Images: ghcr.io/<owner>/veridoc-{api,ai,web}
+# Note: main pushes are already built + Trivy-scanned by ci.yml, so this
+# release pipeline only runs on version tags (and manual dispatch) to avoid
+# double-building every commit and to publish on deliberate releases.
 on:
   push:
-    branches: [main]
     tags: ['v*']
+  workflow_dispatch:
 
 concurrency:
   group: release-${{ github.ref }}
@@ -63,7 +66,7 @@ jobs:
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
 
       - name: Scan (Trivy — fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: veridoc-${{ matrix.name }}:scan
           format: table
