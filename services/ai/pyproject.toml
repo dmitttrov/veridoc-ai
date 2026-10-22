@@ -5,7 +5,7 @@ description = "Veridoc AI inference service (FastAPI). Deterministic mock provid
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 dependencies = [
-    "fastapi>=0.140,<0.144",
+    "fastapi>=0.140,<0.149",
     # Floor for CVE-2025-62727 and CVE-2026-48818 (DoS); requires starlette 1.x,
     # so FastAPI is bumped to a version that supports it.
     "starlette>=1.1.0,<2",
