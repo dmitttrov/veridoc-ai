@@ -25,7 +25,7 @@ dependencies = [
 qlora = ["bitsandbytes>=0.43; platform_system == 'Linux'"]
 dev = [
     "pytest>=8.3,<10",
-    "ruff>=0.6,<0.9",
+    "ruff>=0.6,<0.18",
     "mypy>=1.11,<3",
 ]
 
