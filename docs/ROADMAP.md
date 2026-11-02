@@ -151,6 +151,27 @@ real-filing claim. See `docs/EVALUATION.md`.
       frozen-set gains for v2 are a targeted regression check, not independent
       generalization.
 
+## Conversational RAG in the grounded answer path ✅ (done)
+
+**Goal:** Make `/api/rag` multi-turn so follow-up questions are grounded with
+conversation context, without a second LLM call and fully deterministic under
+the mock (ADR-0026).
+
+**Acceptance criteria**
+- [x] `RagRequest.history` (≤50 user/assistant messages) across contracts
+      (zod + Pydantic + shared wire fixture); `system` role rejected.
+- [x] Deterministic standalone-query condensation for retrieval (question +
+      recent user turns, 2000-char bound); assistant turns excluded.
+- [x] History-aware generation prompt: bounded window, framed as context-not-
+      evidence; stale evidence markers stripped from prior assistant turns.
+- [x] Citation verification / abstention / verify-then-stream unchanged per turn.
+- [x] Web "Grounded conversation" view: threaded turns, per-turn citations,
+      follow-up composer, new-conversation reset.
+- [x] Tests at every boundary: condensation + prompt units, service wiring,
+      HTTP 422 bounds, gateway validation/forwarding, UI history round-trip.
+
+---
+
 ## Phase 5 (planned) — Run the real eval → decision → (approved) publication
 
 Run the Phase 4C commands on the GPU server to get measured base-vs-adapter

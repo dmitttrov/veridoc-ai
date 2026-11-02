@@ -69,6 +69,40 @@ describe('RagController', () => {
     expect(res.ended).toBe(true);
   });
 
+  it('forwards conversation history to the AI service', async () => {
+    const records = [
+      'data: {"type":"done","mock":true,"model":"m","tokenCount":0,"abstained":true,"invalidCitationCount":0}\n\n',
+    ];
+    const ai = {
+      openRagStream: jest.fn().mockResolvedValue(upstreamWith(records)),
+    } as unknown as AiClient;
+    const controller = new RagController(ai);
+
+    const history = [
+      { role: 'user', content: 'What was revenue in FY2023?' },
+      { role: 'assistant', content: 'Revenue was $12.3M [E1].' },
+    ];
+    await controller.rag({ question: 'What about 2022?', history }, fakeReq(), fakeRes());
+
+    expect(ai.openRagStream).toHaveBeenCalledWith(
+      expect.objectContaining({ question: 'What about 2022?', history }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('rejects malformed history before any upstream call', async () => {
+    const ai = { openRagStream: jest.fn() } as unknown as AiClient;
+    const controller = new RagController(ai);
+    await expect(
+      controller.rag(
+        { question: 'q', history: [{ role: 'system', content: 'x' }] },
+        fakeReq(),
+        fakeRes(),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(ai.openRagStream).not.toHaveBeenCalled();
+  });
+
   it('emits a terminal error event when the upstream fails', async () => {
     const ai = {
       openRagStream: jest.fn().mockRejectedValue(new Error('upstream down')),

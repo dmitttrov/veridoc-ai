@@ -388,6 +388,44 @@ numbers and code enter the repo.
 **Consequences.** Publication remains blocked on a real-document evaluation and
 explicit owner approval. **Status: Accepted.**
 
+## ADR-0026 — Conversational RAG: deterministic query condensation; history is context, not evidence
+
+**Context.** The grounded RAG endpoint was single-turn: a follow-up question
+("what about 2022?") lacks the terms retrieval needs and the referents the
+model needs. The common fix — an extra LLM call that rewrites the follow-up
+into a standalone question — doubles latency, adds a failure mode, is
+non-reproducible, and cannot run under the deterministic mock that CI and the
+demo rely on.
+
+**Decision.**
+- `RagRequest` gains bounded `history` (≤50 user/assistant messages, mirroring
+  `ChatRequest`; `system` is rejected at the contract edge so clients can never
+  inject a system prompt).
+- The **retrieval query is condensed deterministically**: the current question
+  first, then the most recent prior *user* turns (newest first, capped at 4),
+  bounded to the retrieval contract's 2000-char query limit. Assistant turns
+  are excluded — folding model output into retrieval would let a prior answer
+  steer retrieval toward itself. No extra LLM call.
+- The **generation prompt** receives a bounded conversation (last 8 turns,
+  1500 chars each) between the system prompt and the evidence message, so the
+  model resolves pronouns at answer time. The system prompt states history is
+  **context, not evidence**: never cite it, never reuse figures from it unless
+  they appear in the current evidence.
+- **Markers are stripped from prior assistant turns** before prompting: an old
+  `[E1]` referred to a *previous* retrieval, and replaying it against the
+  current passage numbering would verify as "valid" while pointing at the
+  wrong evidence.
+- Citation verification, abstention, and verify-then-stream (ADR-0020) are
+  unchanged and apply to every turn.
+
+**Consequences.** Multi-turn grounded QA with zero added inference cost and
+full determinism under the mock. The trade-off: deterministic condensation is
+cruder than LLM query rewriting — a follow-up whose referent appears only in a
+prior *answer* (not any prior question) may retrieve less precisely. Hybrid
+retrieval over question+recent-user-turns tolerates this well in practice; an
+optional LLM rewriter can be added behind a flag once a real model is served.
+**Status: Accepted.**
+
 ## ADR-0009 — Fine-tune via LoRA/QLoRA on an open-weight base *(planned)*
 
 **Context.** We want a domain-adapted model without the cost or honesty problems

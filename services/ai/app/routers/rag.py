@@ -56,6 +56,7 @@ async def rag_answer(request: Request, body: RagRequest) -> StreamingResponse:
                 document_ids=body.document_ids,
                 top_k=body.top_k,
                 rerank=body.rerank,
+                history=body.history,
             )
         except InferenceError as exc:
             # NEVER fall back to the mock: surface the failure explicitly.

@@ -185,6 +185,9 @@ class RetrievalResponse(CamelModel):
 
 class RagRequest(CamelModel):
     question: Annotated[str, Field(min_length=1, max_length=2000)]
+    # Prior conversation turns (oldest first) so follow-up questions can be
+    # interpreted in context. Context only — never evidence.
+    history: Annotated[list[ChatMessage], Field(default_factory=list, max_length=50)]
     document_ids: Annotated[list[UuidDocumentId], Field(default_factory=list, max_length=50)]
     top_k: Annotated[int, Field(default=5, gt=0, le=20)]
     rerank: bool | None = None

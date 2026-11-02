@@ -270,6 +270,13 @@ export type RetrievedPassage = z.infer<typeof RetrievedPassageSchema>;
 
 export const RagRequestSchema = z.object({
   question: z.string().min(1, 'question must not be empty').max(2000),
+  /**
+   * Optional prior conversation turns (oldest first) so follow-up questions
+   * ("what about 2022?") can be understood in context. History is context for
+   * interpreting the question — it is never treated as evidence and answers
+   * remain grounded solely in retrieved passages.
+   */
+  history: z.array(ChatMessageSchema).max(50).optional().default([]),
   /** Optional subset of document ids to restrict grounding to. */
   documentIds: z.array(z.string().uuid()).max(50).optional().default([]),
   /** Number of evidence passages to ground on. */
