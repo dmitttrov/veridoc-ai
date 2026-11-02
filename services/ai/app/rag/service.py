@@ -10,14 +10,16 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import asyncpg
 
 from app.config import Settings
 from app.embeddings.base import EmbeddingProvider
-from app.models import Citation, RetrievalRequest, RetrievedPassage
+from app.models import ChatMessage, Citation, RetrievalRequest, RetrievedPassage
 from app.providers.base import GenerationResult, InferenceProvider
+from app.rag.condense import condense_query
 from app.rag.prompt import ABSTAIN_SENTINEL, build_messages, marker_for
 from app.reranking.base import Reranker
 from app.retrieval.service import retrieve as run_retrieve
@@ -108,12 +110,22 @@ async def answer_question(
     document_ids: list[str],
     top_k: int,
     rerank: bool | None,
+    history: Sequence[ChatMessage] = (),
 ) -> RagOutcome:
+    # Follow-up questions are condensed with recent user turns into a
+    # standalone retrieval query (deterministic, no extra LLM call; ADR-0026).
+    retrieval_query = condense_query(question, history)
+    if history:
+        logger.info(
+            "rag conversational turn: history_messages=%d query_chars=%d",
+            len(history),
+            len(retrieval_query),
+        )
     retrieval = await run_retrieve(
         pool,
         embedder,
         RetrievalRequest(
-            query=question, document_ids=document_ids, top_k=top_k, rerank=rerank
+            query=retrieval_query, document_ids=document_ids, top_k=top_k, rerank=rerank
         ),
         reranker,
         rerank_candidate_k=settings.rerank_candidate_k,
@@ -137,7 +149,7 @@ async def answer_question(
             reranker_model=retrieval.reranker_model,
         )
 
-    messages = build_messages(question, passages)
+    messages = build_messages(question, passages, history)
     result: GenerationResult = await provider.generate(
         messages,
         max_tokens=settings.inference_max_tokens,

@@ -4,6 +4,28 @@ This document describes the system as it exists after **Phase 3 (reranking +
 grounded generation)** and the seams designed in for later phases. Work built
 now and future work are labelled throughout.
 
+## Conversational grounded RAG (built)
+
+The grounded RAG path is multi-turn. `RagRequest` carries a bounded
+conversation `history` (≤50 user/assistant messages; `system` is rejected at
+the contract edge), and the pipeline uses it in two places (ADR-0026):
+
+- **Retrieval:** the follow-up question is condensed **deterministically** into
+  a standalone query — current question first, then the most recent prior user
+  turns, bounded to the 2000-char retrieval limit. No extra LLM call, so the
+  path stays reproducible under the mock provider and adds no inference cost
+  or failure mode. Assistant turns are excluded so a prior answer cannot steer
+  retrieval toward itself.
+- **Generation:** a bounded window of the conversation (last 8 turns, 1500
+  chars each) is passed as proper chat messages so the model resolves
+  pronouns. History is framed as **context, not evidence** — the model must
+  not cite it or reuse figures from it, and evidence markers are stripped from
+  prior assistant turns (their numbering referred to a previous retrieval).
+
+Citation verification, abstention, and verify-then-stream apply unchanged to
+every turn. The web client's "Grounded conversation" view keeps the thread,
+sends completed turns as history, and renders per-turn verified citations.
+
 ## Phase 3 additions (reranking + real inference + grounded RAG)
 
 Phase 3 adds a trustworthy answer path on top of Phase 2 retrieval:

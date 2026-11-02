@@ -11,6 +11,7 @@ import uuid
 from app.eval.corpus import ACME, INITECH
 from app.eval.pdf_build import build_pdf
 from app.ingestion.pipeline import ingest_pdf
+from app.models import ChatMessage as WireMessage
 from app.models import RetrievalRequest
 from app.providers.base import ChatMessage, GenerationResult
 from app.providers.mock import MockProvider
@@ -49,6 +50,29 @@ async def test_grounded_answer_has_valid_traceable_citations(pool, embedder, set
         # Every citation maps to a retrieved chunk (validity) and is traceable.
         assert c.chunk_id in retrieved_ids
         assert c.marker is not None and c.char_start is not None
+
+
+async def test_follow_up_turn_retrieves_via_condensed_history(pool, embedder, settings) -> None:
+    # A bare follow-up ("what about R&D?") plus history naming the topic must
+    # still retrieve evidence and produce valid citations end-to-end.
+    await _ingest(pool, embedder, settings, ACME_PDF, "acme.pdf")
+    provider = MockProvider(model_name="veridoc-mock-0.1")
+
+    outcome = await answer_question(
+        pool, embedder, None, provider, settings,
+        question="And how much went to research and development?",
+        document_ids=[], top_k=5, rerank=None,
+        history=[
+            WireMessage(role="user", content="What were Acme's operating expenses?"),
+            WireMessage(role="assistant", content="Operating expenses were reported [E1]."),
+        ],
+    )
+
+    assert outcome.abstained is False
+    assert outcome.invalid_citation_count == 0
+    assert outcome.citations, "expected citations on a follow-up turn"
+    retrieved_ids = {p.chunk_id for p in outcome.passages}
+    assert all(c.chunk_id in retrieved_ids for c in outcome.citations)
 
 
 async def test_abstains_when_no_evidence(pool, embedder, settings) -> None:

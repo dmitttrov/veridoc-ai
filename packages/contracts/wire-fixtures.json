@@ -106,6 +106,10 @@
   },
   "ragRequest": {
     "question": "What was total revenue for FY2023?",
+    "history": [
+      { "role": "user", "content": "Which fiscal year does the report cover?" },
+      { "role": "assistant", "content": "The report covers FY2023 [E1]." }
+    ],
     "documentIds": ["11111111-1111-4111-8111-111111111111"],
     "topK": 5,
     "rerank": true

@@ -66,6 +66,42 @@ describe('RetrievalRequestSchema', () => {
   });
 });
 
+describe('RagRequestSchema', () => {
+  it('defaults history, documentIds, and topK', () => {
+    const parsed = RagRequestSchema.parse({ question: 'What was revenue?' });
+    expect(parsed.history).toEqual([]);
+    expect(parsed.documentIds).toEqual([]);
+    expect(parsed.topK).toBe(5);
+  });
+
+  it('accepts bounded conversation history', () => {
+    const parsed = RagRequestSchema.parse({
+      question: 'What about 2022?',
+      history: [
+        { role: 'user', content: 'What was revenue in FY2023?' },
+        { role: 'assistant', content: 'Revenue was $12.3M [E1].' },
+      ],
+    });
+    expect(parsed.history).toHaveLength(2);
+  });
+
+  it('rejects history beyond 50 messages', () => {
+    const result = RagRequestSchema.safeParse({
+      question: 'q',
+      history: Array.from({ length: 51 }, () => ({ role: 'user', content: 'x' })),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a history message with an invalid role', () => {
+    const result = RagRequestSchema.safeParse({
+      question: 'q',
+      history: [{ role: 'system', content: 'x' }],
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe('encodeSseEvent', () => {
   it('produces a well-formed SSE record', () => {
     const record = encodeSseEvent({ type: 'token', text: 'hello' });
