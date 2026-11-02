@@ -27,6 +27,9 @@ dev = [
     "pytest>=8.3,<10",
     "ruff>=0.6,<0.9",
     "mypy>=1.11,<3",
+    # Deterministic PDF rendering for the end-to-end real-eval corpus
+    # (same library + invariant mode as services/ai's eval PDFs).
+    "reportlab>=4.2,<6",
 ]
 
 [build-system]

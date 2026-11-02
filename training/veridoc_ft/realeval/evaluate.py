@@ -19,12 +19,35 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from veridoc_ft.config import TrainConfig
 from veridoc_ft.realeval.dataset import RealExample, load_real
 from veridoc_ft.realeval.normalize import periods_match, to_base, values_match
+
+# Numbers as written in a passage, each with ITS OWN inline scale word
+# (million/billion/…) — not the gold unit — so support is judged against the
+# figure as the passage states it.
+_NUM_RE = re.compile(
+    r"\$?\(?-?[\d,]+(?:\.\d+)?\)?(?:\s*(?:million|billion|thousand|percent))?",
+    re.IGNORECASE,
+)
+
+
+def passage_contains_gold(passage: str, gold: dict) -> bool:
+    """Does this passage contain a number matching the gold magnitude?
+
+    Shared by oracle citation-support scoring and the end-to-end harness's
+    retrieval-hit metric (did retrieval surface a passage that supports gold).
+    """
+    if to_base(gold.get("value"), gold.get("unit")) is None:
+        return False
+    for m in _NUM_RE.findall(passage):
+        if m.strip() and values_match(m, None, gold.get("value"), gold.get("unit")):
+            return True
+    return False
 
 
 def _passage_supports(evidence: list[str], marker: str | None, gold: dict) -> bool:
@@ -37,21 +60,7 @@ def _passage_supports(evidence: list[str], marker: str | None, gold: dict) -> bo
         return False
     if not (0 <= idx < len(evidence)):
         return False
-    passage = evidence[idx]
-    if to_base(gold.get("value"), gold.get("unit")) is None:
-        return False
-    # Scan the passage for a number matching the gold magnitude. Each number is
-    # read with ITS OWN inline scale word (million/billion/…) — not the gold
-    # unit — so support is judged against the figure as written in the passage.
-    import re
-    num_re = re.compile(
-        r"\$?\(?-?[\d,]+(?:\.\d+)?\)?(?:\s*(?:million|billion|thousand|percent))?",
-        re.IGNORECASE,
-    )
-    for m in num_re.findall(passage):
-        if m.strip() and values_match(m, None, gold.get("value"), gold.get("unit")):
-            return True
-    return False
+    return passage_contains_gold(evidence[idx], gold)
 
 
 def score_real(ex: RealExample, pred: dict) -> dict:

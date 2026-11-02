@@ -120,6 +120,29 @@ python -m vllm.entrypoints.openai.api_server \
 > **published / preferred** artifact is **adapter-v2** — substitute
 > `artifacts/adapter-v2` to serve the released model.
 
+### Containerized serving (compose overlay)
+
+The reproducible path is the GPU compose overlay (ADR-0027), which runs a
+digest-pinned vLLM image serving the pinned base + **adapter-v2** as
+`veridoc-extract`, disables Qwen3's thinking mode server-side (strict JSON
+extraction needs direct output), and flips the AI service to
+`openai_compatible` in one step:
+
+```bash
+# CUDA host with the NVIDIA container toolkit; adapter weights fetched to
+# training/artifacts/adapter-v2/ first (git-ignored).
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.vllm.yml up -d
+# Baseline (no adapter) runs: AI_INFERENCE_MODEL=Qwen/Qwen3-0.6B docker compose ... up -d
+```
+
+### End-to-end RAG real eval (retrieval + extraction)
+
+`veridoc_ft.realeval.e2e` evaluates the frozen SEC benchmark end-to-end:
+deterministic corpus PDFs → gateway ingestion → hybrid retrieval → extraction
+→ oracle scoring, with gold rewriting and retrieval-hit accounting. See the
+runbook in `docs/EVALUATION.md`; mechanics are unit-tested without GPU/network
+(`tests/test_realeval_e2e.py`).
+
 For local evaluation without a server, `veridoc_ft.infer.load_model(config,
 adapter_path=...)` loads base or base+adapter directly (same decoding), and
 `veridoc_ft.evaluate` validates that generations are schema-conformant.

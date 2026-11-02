@@ -397,3 +397,50 @@ reasoning model). An *experimental*, clearly-labelled release is justified; a
 *non-experimental* release still requires the authentic-filing-text evaluation
 above. Because v2 targeted the benchmark's failure modes, its scores are a
 regression check, not independent generalization evidence.
+
+# End-to-end RAG real eval — harness BUILT, numbers NOT RUN (needs GPU)
+
+`veridoc_ft.realeval.e2e` closes the loop the oracle eval deliberately left
+open (Step 3B): questions are answered from the passages **hybrid retrieval
+actually returns** over ingested documents, not from oracle evidence. Design
+(ADR-0027):
+
+- The frozen SEC benchmark's evidence passages are rendered into deterministic
+  per-company PDF "filing digests" (reportlab `invariant=1`, one passage per
+  page) and ingested through the **production edge** — the gateway's upload
+  endpoint — so the eval exercises validation, ingestion, chunking, embedding,
+  and hybrid retrieval exactly as deployed. Ingestion is idempotent.
+- **Gold rewriting:** an oracle-"unanswerable" question is usually answerable
+  from the full corpus (the asked metric is some other example's answer), so
+  gold is re-derived against the corpus facts index; rewrites are counted
+  (`n_rewritten_unanswerable`) and flagged per example.
+- **Retrieval-hit accounting:** for each supported example the report records
+  whether any retrieved passage contains the gold value (`retrieval_hit_rate`),
+  and extraction accuracy is reported both overall and conditioned on a hit
+  (`value_exact_given_hit`) — retrieval misses are never silently charged to
+  the extractor. Oracle-vs-e2e deltas therefore isolate the retrieval cost.
+- Extraction runs the same direct HF inference path (greedy, identical decoding
+  base vs adapter) and the same normalizer-based scorer as all prior evals.
+
+**Status: NOT RUN** — extraction needs the GPU server. Mechanics are covered by
+12 unit tests with faked gateway/model (`training/tests/test_realeval_e2e.py`).
+
+## Runbook (GPU server)
+
+```bash
+# 1. Retrieval stack (CPU is fine; deterministic embeddings by default):
+docker compose -f infra/docker-compose.yml up -d db ai api
+
+# 2. From training/ with the GPU venv and the frozen benchmark on disk:
+python -m veridoc_ft.realeval.e2e --data data/realeval/real_test.jsonl \
+    --out artifacts/real_e2e_base.json
+python -m veridoc_ft.realeval.e2e --data data/realeval/real_test.jsonl \
+    --adapter artifacts/adapter-v2 --out artifacts/real_e2e_adapter.json
+```
+
+Flags: `--gateway-url` (default `http://localhost:3000`), `--top-k` (default 5),
+`--rerank {auto,on,off}`, `--limit N` for a pilot. Caveat to report with the
+numbers: the compose default embeds with the deterministic hashing provider, so
+the semantic retrieval leg is non-semantic unless the AI image is run with the
+`sentence-transformers` extra and `AI_EMBEDDING_PROVIDER=sentence-transformers`
+— state which configuration produced any published figures.
