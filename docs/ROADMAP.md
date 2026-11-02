@@ -134,7 +134,12 @@ real-filing claim. See `docs/EVALUATION.md`.
       on negative values + abstention gap documented. **Decision: A (experimental).**
 - [ ] Authentic filing-TEXT eval (templated-prose evidence only so far) — blocks
       a non-experimental release.
-- [ ] End-to-end RAG real-eval (retrieval + extraction) over ingested real docs.
+- [x] End-to-end RAG real-eval **harness** (`veridoc_ft.realeval.e2e`, ADR-0027):
+      corpus PDFs from the frozen benchmark → gateway ingestion → hybrid
+      retrieval → extraction → oracle scoring with gold rewriting and
+      retrieval-hit accounting. Unit-tested with faked gateway/model.
+- [ ] End-to-end RAG real-eval **executed** on the GPU server (runbook in
+      docs/EVALUATION.md); numbers NOT RUN yet.
 
 ## Phase 4D — adapter-v2: targeted fixes ✅ (done)
 
@@ -176,8 +181,14 @@ the mock (ADR-0026).
 
 Run the Phase 4C commands on the GPU server to get measured base-vs-adapter
 real-world numbers → finalize the release decision → if justified, execute the
-release checklist (adapter-only HF upload) once approved; plus OpenTelemetry,
-rate limiting, and a containerized vLLM serving path for the adapter.
+release checklist (adapter-only HF upload) once approved; plus OpenTelemetry
+and rate limiting.
+
+Done ahead of schedule: the **containerized vLLM serving path** for the adapter
+(`infra/docker-compose.vllm.yml`, ADR-0027) — pinned vLLM image serving the
+pinned Qwen3-0.6B base + adapter-v2 LoRA as `veridoc-extract`, internal-only,
+thinking mode disabled server-side, with the AI service switched to
+`openai_compatible` by the same overlay.
 
 ---
 

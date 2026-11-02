@@ -426,6 +426,42 @@ retrieval over question+recent-user-turns tolerates this well in practice; an
 optional LLM rewriter can be added behind a flag once a real model is served.
 **Status: Accepted.**
 
+## ADR-0027 — End-to-end RAG real eval through the gateway; containerized vLLM serving
+
+**Context.** The oracle real eval (ADR-0024/0025) isolates extraction by
+handing the model human-verified evidence; the remaining Phase 4C gap is
+measuring the SAME benchmark **end-to-end**: ingested documents → hybrid
+retrieval → extraction. Separately, serving adapter-v2 needed a reproducible
+container path instead of a hand-run vLLM process.
+
+**Decision.**
+- The e2e harness lives in **training** (`veridoc_ft.realeval.e2e`) and talks
+  to the stack **only over the gateway's public HTTP endpoints** (upload +
+  retrieve). This preserves the package split (ADR-0023), keeps the AI service
+  internal-only (SECURITY), and makes the eval exercise the production edge.
+- The corpus is derived **from the frozen benchmark itself**: evidence
+  passages become deterministic per-company PDFs (reportlab `invariant=1`, one
+  passage per page), so ingestion is idempotent and runs are reproducible.
+- **Gold is re-derived against the corpus**: oracle-"unanswerable" questions
+  whose asked fact exists in the ingested corpus become answerable (counted +
+  flagged). Scoring abstention as a win there would reward failure.
+- **Retrieval-hit accounting**: `retrieval_hit_rate` and
+  `value_exact_given_hit` are reported so retrieval misses are never charged
+  to the extractor, and oracle-vs-e2e deltas isolate retrieval cost.
+- **Serving**: a compose overlay (`infra/docker-compose.vllm.yml`) runs a
+  **digest-pinned** vLLM image with the pinned Qwen3-0.6B revision,
+  `--enable-lora --lora-modules veridoc-extract=<adapter-v2>`, and
+  `--default-chat-template-kwargs '{"enable_thinking": false}'` (Qwen3's
+  thinking mode would break strict-JSON extraction; disabling it server-side
+  matches the training/eval inference path). vLLM is internal-only; the same
+  overlay flips the AI service to `openai_compatible`. Baseline runs select
+  the base model per request via `AI_INFERENCE_MODEL=Qwen/Qwen3-0.6B`.
+
+**Consequences.** The e2e eval requires the compose stack up (db+ai+api) and a
+GPU for extraction; harness mechanics are unit-tested with faked gateway/model.
+Default compose embeddings are the deterministic hashing provider — published
+e2e figures must state the embedding configuration used. **Status: Accepted.**
+
 ## ADR-0009 — Fine-tune via LoRA/QLoRA on an open-weight base *(planned)*
 
 **Context.** We want a domain-adapted model without the cost or honesty problems
