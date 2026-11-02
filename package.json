@@ -21,6 +21,7 @@
     "test": "npm run test --workspaces --if-present"
   },
   "overrides": {
-    "multer": "2.4.0"
+    "multer": "2.5.0",
+    "body-parser": "1.20.9"
   }
 }
