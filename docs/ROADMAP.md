@@ -132,8 +132,12 @@ real-filing claim. See `docs/EVALUATION.md`.
       improves schema_valid 0.778→1.0, value_exact 0.920→0.980, metric_exact
       0.801→0.841 (paired bootstrap). Generalizes, not just memorizes. Regression
       on negative values + abstention gap documented. **Decision: A (experimental).**
-- [ ] Authentic filing-TEXT eval (templated-prose evidence only so far) — blocks
-      a non-experimental release.
+- [x] Authentic filing-TEXT eval — **EXECUTED 2026-11-05**
+      (`veridoc_ft.realeval.authentic`: verbatim EDGAR 10-K text, real
+      embeddings + cross-encoder, XBRL gold). **Verdict: adapter-v2 abstains
+      on 78/78 authentic questions — a non-experimental release is NOT
+      justified**; retrieval (42% top-5 hit) is the binding constraint and
+      Qwen3-4B reads real tables no better than 0.6B. See docs/EVALUATION.md.
 - [x] End-to-end RAG real-eval **harness** (`veridoc_ft.realeval.e2e`, ADR-0027):
       corpus PDFs from the frozen benchmark → gateway ingestion → hybrid
       retrieval → extraction → oracle scoring with gold rewriting and

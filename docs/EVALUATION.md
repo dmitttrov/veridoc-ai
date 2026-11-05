@@ -398,7 +398,82 @@ reasoning model). An *experimental*, clearly-labelled release is justified; a
 above. Because v2 targeted the benchmark's failure modes, its scores are a
 regression check, not independent generalization evidence.
 
-# End-to-end RAG real eval — harness BUILT, numbers NOT RUN (needs GPU)
+# Authentic filing-TEXT eval — EXECUTED (GPU server, 2026-11-05)
+
+The release blocker is now **measured**. `veridoc_ft.realeval.authentic`
+ingests the **verbatim text of the actual 10-K filings** (fetched from EDGAR
+by the benchmark's own accessions; HTML stripped with table rows preserved as
+`label | value | value` lines; hidden inline-XBRL dropped so machine-readable
+gold cannot leak) and answers benchmark questions from hybrid retrieval over
+that text, scored against the same XBRL gold. The harness passed a 25-agent
+adversarial review before the run (16 confirmed findings fixed, incl. two
+that would have silently faked these numbers: hidden-XBRL leakage paths and
+retrieval unscoped to the eval's own documents).
+
+**Configuration** (self-documented in each report's `retrieval_meta`):
+`sentence-transformers/all-MiniLM-L6-v2` embeddings + active
+`cross-encoder/ms-marco-MiniLM-L-6-v2` reranking, top_k=5, greedy decoding,
+1× RTX PRO 6000. Corpus: 6 primary 10-K documents (aapl-20250927,
+msft-20260630, jpm-20251231, jnj-20251228, wmt-20260131, xom-20251231), 801
+rendered pages / ~2.96 M chars; JPMorgan's 1.2 M-char filing is truncated at
+the 290-page cap. Gold: 78 (metric, fiscal-year) items — each filing's FY and
+FY-1, whole-millions values only. Because real tables state scale in column
+headers, both scale-aware and digit-exact regimes are reported; digit-exact
+is the operative one on this corpus.
+
+| metric (n=78) | base 0.6B | adapter-v2 | Qwen3-4B\* |
+| --- | --- | --- | --- |
+| retrieval_hit_digits (top-5) | 0.4231 | 0.4231 | 0.4231 |
+| retrieval_hit (scale-aware) | 0.0513 | 0.0513 | 0.0513 |
+| schema_valid | 0.9103 | 1.0000 | 0.9872 |
+| metric_exact | 0.5769 | 0.9615 | 0.9744 |
+| value_digits_exact | 0.1282 | **0.0000** | 0.1410 |
+| value_digits_given_hit | 0.3030 | **0.0000** | 0.3333 |
+| citation_support_digits | 0.1923 | 0.0000 | 0.2821 |
+| false_abstention_rate | 0.0000 | **1.0000** | 0.1667 |
+| mean latency | 1.03 s | 0.95 s | 1.25 s |
+
+\* `Qwen/Qwen3-4B` @ `1cfa9a7208912126459214e8b04321603b3df60c`, no adapter.
+
+## Findings
+
+1. **Retrieval is the binding constraint on real text.** Even with semantic
+   embeddings and an active cross-encoder, only 42% of questions get a
+   gold-bearing passage into the top-5 (vs 100% on the templated corpora).
+   Real filing vocabulary is the wall — filings say "Total net sales", the
+   questions say "total revenue" — and coverage is wildly company-dependent:
+   Walmart 11/14 but Exxon 1/12. The scale-aware hit rate (5%) confirms real
+   tables almost never carry inline scale words.
+2. **adapter-v2 fails authentic filing text completely.** It emitted a
+   schema-valid abstention for **all 78 questions** (value_digits 0.0, false
+   abstention 1.0) — the fine-tune learned "templated sentence or refuse" and
+   transfers nothing to real table rows, consistent with its e2e
+   over-abstention but categorical here. **The release-blocker question is
+   answered: a non-experimental release is NOT justified.** The experimental
+   label and the model card's "synthetic text only" limitation were correct;
+   the card's limitation can now cite a measured result. Dataset v3 must
+   train on authentic-format evidence (flattened table rows), not only
+   templated prose.
+3. **Model scale is not the fix either.** 4B ≈ 0.6B at reading real table
+   rows (digit-exact given a retrieval hit: 0.33 vs 0.30). Scale fixes the
+   trivia around the task — metric naming (0.97 vs 0.58) and parse failures
+   (1% vs 9%) — not evidence-format competence. The leverage order is:
+   retrieval vocabulary (query expansion / synonyms), table-aware evidence
+   formatting, then authentic-format fine-tuning; a bigger base alone buys
+   little.
+4. Abstention calibration differs by scale: 0.6B never abstains (answers
+   wrong instead), 4B abstains on 17% of answerable items.
+
+## Limitations (stated, not hidden)
+
+Authentic **text**, not authentic layout: HTML tables are flattened to pipe-
+joined rows, which is already hostile enough to collapse extraction, but
+PDF-native layout would differ. JPMorgan's filing is truncated at the page
+cap (gold rows may be absent — counted against retrieval honestly).
+n=78 over 6 mega-caps; digit-exact matching requires whole-million gold
+values; no paired-bootstrap on this round (the adapter's 0/78 needs none).
+
+# End-to-end RAG real eval (templated corpus) — EXECUTED 2026-11-02
 
 `veridoc_ft.realeval.e2e` closes the loop the oracle eval deliberately left
 open (Step 3B): questions are answered from the passages **hybrid retrieval
