@@ -12,7 +12,7 @@ dependencies = [
     # transformers.HybridCache (which older peft imports), breaking the LoRA
     # trainer + smoke test. Reverts Dependabot #10; the v5 migration is tracked
     # separately (needs the new warmup API + peft>=0.18).
-    "transformers>=4.51,<5",
+    "transformers>=4.51,<6",
     "peft>=0.11,<0.18",
     "datasets>=2.19,<6",
     "accelerate>=0.30,<2",
