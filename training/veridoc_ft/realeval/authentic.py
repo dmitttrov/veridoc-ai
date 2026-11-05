@@ -51,9 +51,13 @@ from veridoc_ft.realeval.normalize import periods_match, values_match
 
 _ARCHIVES = "https://www.sec.gov/Archives/edgar/data"
 _REQUEST_DELAY_S = 0.25
-# Page size fed to the deterministic PDF builder; the ingestion pipeline then
-# chunks pages further (800/150 chars). Ingestion caps documents at 300 pages.
-_PAGE_CHARS = 2800
+# Page budget fed to the deterministic PDF builder; the ingestion pipeline
+# then chunks pages further (800/150 chars). Ingestion caps documents at 300
+# pages, and the renderer fits 46 lines of 14pt leading on a LETTER page — the
+# line cap keeps one logical page = one physical page, or overflow pages would
+# push a 290-page document past the gateway's 300-page limit.
+_PAGE_CHARS = 6400
+_PAGE_LINES = 46
 _MAX_PAGES = 290
 
 # Number tokens as printed in filings ("391,035", "1,234.5").
@@ -183,14 +187,25 @@ def _wrap(line: str, width: int = 160) -> list[str]:
     return out
 
 
-def paginate(text: str, page_chars: int = _PAGE_CHARS, max_pages: int = _MAX_PAGES) -> list[str]:
-    """Split filing text into wrapped pages at line boundaries (deterministic)."""
+def paginate(
+    text: str,
+    page_chars: int = _PAGE_CHARS,
+    max_pages: int = _MAX_PAGES,
+    page_lines: int = _PAGE_LINES,
+) -> list[str]:
+    """Split filing text into wrapped pages at line boundaries (deterministic).
+
+    Bounded by BOTH chars and line count: the line cap keeps every logical
+    page on a single rendered page, so the document's physical page count
+    never exceeds `max_pages` and the ingestion limit.
+    """
     pages: list[str] = []
     current: list[str] = []
     size = 0
     for raw in text.splitlines():
         for line in _wrap(raw):
-            if size + len(line) + 1 > page_chars and current:
+            full = (size + len(line) + 1 > page_chars) or (len(current) >= page_lines)
+            if full and current:
                 pages.append("\n".join(current))
                 current, size = [], 0
                 if len(pages) >= max_pages:

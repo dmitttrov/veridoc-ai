@@ -101,6 +101,14 @@ def test_pages_respect_size_and_are_deterministic() -> None:
     assert "".join(pages).count("line 299") == 1  # nothing dropped
 
 
+def test_pages_never_exceed_the_rendered_line_capacity() -> None:
+    # One logical page must fit one physical LETTER page (46 lines), or the
+    # PDF gains overflow pages and busts the gateway's 300-page limit.
+    text = "\n".join("r" for _ in range(500))  # 500 one-char lines
+    pages = paginate(text, page_chars=100_000)
+    assert all(len(p.splitlines()) <= 46 for p in pages)
+
+
 def test_long_paragraph_lines_are_wrapped_below_pdf_limit() -> None:
     # The PDF renderer truncates lines at 200 chars; unwrapped prose would
     # silently lose filing text (and with it, gold values).
