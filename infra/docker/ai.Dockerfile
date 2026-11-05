@@ -2,7 +2,7 @@
 # published for it in docker-compose.
 #
 # Base image pinned by digest (python:3.11-slim) for reproducible builds.
-FROM python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce
+FROM python:3.11-slim@sha256:064f01707f2fc8b06bae86bb43875266c6e41bac7994e77ec5dc623c4a4d0545
 
 WORKDIR /app
 

@@ -14,10 +14,18 @@
 #   AI_INFERENCE_MODEL=Qwen/Qwen3-0.6B   -> pinned base, no adapter (baseline runs)
 #
 # vLLM stays INTERNAL ONLY (no host port), like the AI service and the DB:
-# only the AI service talks to it. Qwen3's chat template defaults to thinking
-# mode; --default-chat-template-kwargs disables it server-wide so the strict
-# JSON extraction behaviour matches the training/eval inference path
-# (enable_thinking=False). Requests can still override per call.
+# only the AI service talks to it.
+#
+# Thinking mode is a single switch with two measured operating points (see
+# docs/EVALUATION.md "Serving validation"):
+#   extraction (default):  VLLM_ENABLE_THINKING=false — matches the adapter's
+#       training/eval inference path (enable_thinking=False); strict JSON out.
+#   grounded QA:           VLLM_ENABLE_THINKING=true AI_INFERENCE_MAX_TOKENS=2048
+#       — with thinking off the 0.6B base answers the QA prompt with the
+#       abstain sentinel even when the gold passage is [E1]; with thinking on
+#       it reasons to the correct cited answer. --reasoning-parser qwen3 keeps
+#       the thinking trace out of message content either way, so it can never
+#       leak into a streamed RAG answer. Requests can still override per call.
 
 services:
   vllm:
@@ -33,8 +41,10 @@ services:
       - veridoc-extract=/adapters/adapter-v2
       - --max-lora-rank
       - "16"
+      - --reasoning-parser
+      - qwen3
       - --default-chat-template-kwargs
-      - '{"enable_thinking": false}'
+      - '{"enable_thinking": ${VLLM_ENABLE_THINKING:-false}}'
       - --port
       - "8000"
     environment:
@@ -76,8 +86,11 @@ services:
       AI_INFERENCE_BASE_URL: http://vllm:8000/v1
       AI_INFERENCE_MODEL: ${AI_INFERENCE_MODEL:-veridoc-extract}
       # RAG buffers a full verified generation before streaming; give the small
-      # GPU model headroom over the 60s default.
+      # GPU model headroom over the 60s default. In grounded-QA mode the
+      # thinking trace consumes the token budget before the answer, so raise
+      # AI_INFERENCE_MAX_TOKENS alongside VLLM_ENABLE_THINKING=true.
       AI_INFERENCE_TIMEOUT_S: "120"
+      AI_INFERENCE_MAX_TOKENS: ${AI_INFERENCE_MAX_TOKENS:-512}
     depends_on:
       vllm:
         condition: service_healthy
