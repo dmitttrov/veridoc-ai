@@ -149,7 +149,12 @@ and cleaner abstention. **This is generalization, not pure template memorization
   base**. It was trained only on positive synthetic values.
 - **Abstention gap** — confuses near-synonym metrics ("cash and cash
   equivalents" vs "net cash from operating activities") on 12 unanswerable cases.
-- **Authentic filing text: untested.**
+- **Authentic filing text: FAILS (measured 2026-11-05, adapter-v2).** On the
+  verbatim text of real 10-K filings (tables flattened to rows, retrieved
+  evidence), adapter-v2 emits a schema-valid abstention on **78 of 78**
+  answerable questions — the fine-tune does not transfer beyond
+  templated-sentence evidence. Do NOT use this adapter on real filing text.
+  See `docs/EVALUATION.md` ("Authentic filing-TEXT eval").
 
 **Release status: A — experimental release justified**, as a small
 domain-adapted structured-extraction adapter (NOT a financial reasoning model),

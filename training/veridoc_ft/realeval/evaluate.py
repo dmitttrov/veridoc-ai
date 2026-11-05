@@ -50,14 +50,18 @@ def passage_contains_gold(passage: str, gold: dict) -> bool:
     return False
 
 
+_VALID_MARKER = re.compile(r"^E[1-9]\d*$")
+
+
 def _passage_supports(evidence: list[str], marker: str | None, gold: dict) -> bool:
-    """Does the cited passage actually contain the gold value? (support, not validity)"""
-    if not marker or not marker.startswith("E"):
+    """Does the cited passage actually contain the gold value? (support, not validity)
+
+    Only strictly-formed markers count: int() leniency ('E+1', 'E 1') must not
+    credit support for a citation the validity metric rejects.
+    """
+    if not marker or not _VALID_MARKER.match(marker):
         return False
-    try:
-        idx = int(marker[1:]) - 1
-    except ValueError:
-        return False
+    idx = int(marker[1:]) - 1
     if not (0 <= idx < len(evidence)):
         return False
     return passage_contains_gold(evidence[idx], gold)
