@@ -422,8 +422,76 @@ actually returns** over ingested documents, not from oracle evidence. Design
 - Extraction runs the same direct HF inference path (greedy, identical decoding
   base vs adapter) and the same normalizer-based scorer as all prior evals.
 
-**Status: NOT RUN** — extraction needs the GPU server. Mechanics are covered by
-12 unit tests with faked gateway/model (`training/tests/test_realeval_e2e.py`).
+Mechanics are covered by 12 unit tests with faked gateway/model
+(`training/tests/test_realeval_e2e.py`).
+
+## Measured results — EXECUTED (GPU server, 2026-11-05)
+
+Configuration (disclosed per the harness caveat): deterministic hashing
+embeddings, no reranker, `top_k=5`, greedy decoding, direct HF inference on
+1× RTX PRO 6000 Blackwell; corpus = 6 company PDFs / 144 pages built from the
+frozen 239-example benchmark; ingestion through the gateway took 1.14 s and is
+idempotent. 80 of the 88 oracle-unanswerable examples were rewritten to
+answerable against the corpus (as designed); 8 remained truly unanswerable.
+
+| metric (n=239) | base | adapter-v2 |
+| --- | --- | --- |
+| retrieval_hit_rate | **1.0000** | **1.0000** |
+| schema_valid | 0.9916 | 1.0000 |
+| metric_exact | 0.7316 | 1.0000 |
+| value_exact | 0.9784 | 0.9048 |
+| value_exact_given_hit | 0.9784 | 0.9048 |
+| citation_valid / support | 1.0000 / 1.0000 | 0.9048 / 0.9048 |
+| abstention precision / recall | 1.0000 / 0.2500 | 0.2667 / 1.0000 |
+| answered-but-WRONG (supported) | 5 | **0** |
+| false abstentions (supported) | 0 | 22 |
+| mean latency | 1.13 s | 1.23 s |
+
+**Retrieval is not the bottleneck**: hybrid retrieval surfaced a passage
+containing the gold value in the top-5 for every supported question, even with
+non-semantic hashing embeddings (the corpus is small and lexically clean —
+this does not generalize to larger/noisier corpora).
+
+**The adapter trades coverage for precision end-to-end.** Its value_exact drop
+vs oracle mode (1.0 → 0.9048) is almost entirely **20 false abstentions on the
+`conflicting` (restatement) category** (value_exact 0.1667 vs base 1.0 there):
+given top-5 evidence containing both the original and the restated figure plus
+distractors, adapter-v2's targeted abstention training over-triggers instead
+of preferring the superseding value. Everywhere else it is equal or better
+(answerable 0.9886 vs 0.9773, multi_page 1.0 vs 0.9744) and it **never answers
+incorrectly** (0 wrong answers vs the base's 5; base metric_exact is only
+0.7316 because it frequently echoes the metric name imprecisely). Neither
+model dominates: the base answers everything and is sometimes wrong; the
+adapter is never wrong but refuses genuine restatement questions. Fixing
+conflict-resolution under retrieval noise is a concrete target for a future
+dataset v3.
+
+## Serving validation (vLLM, measured live)
+
+The pinned vLLM v0.33.0 + LoRA serving path was validated on the GPU server
+(GPU 1) with both model ids (`Qwen/Qwen3-0.6B`, `veridoc-extract`) served:
+
+- **Extraction parity**: `veridoc-extract` with its training prompt and
+  `enable_thinking=false` returns the exact correct strict-JSON extraction
+  (value, marker, supported) — vLLM serving matches the transformers path.
+- **Live conversational grounded RAG**: through the full production chain
+  (gateway → AI service `openai_compatible` → vLLM base model), a follow-up
+  turn with conversation history produced a REAL grounded, citation-verified
+  answer: *"For FY2025, Apple Inc. reported total revenue of $416,161 million
+  and net income of $112,010 million. [E1] and [E2] …"* (`mock:false`,
+  `invalidCitationCount:0`). Questions about facts absent from the corpus
+  correctly abstained.
+- **Thinking-mode interplay (measured)**: with Qwen3's thinking disabled, BOTH
+  base and adapter answer the grounded-QA prompt with the abstain sentinel
+  even when the gold passage is `[E1]`; with thinking enabled (plus
+  `--reasoning-parser qwen3` so the trace never reaches clients) the base
+  reasons to the correct cited answer. The 0.6B base also shows a
+  **first-turn abstention bias** on the strict QA prompt (it answered the
+  follow-up turn but abstained on the opening turn at both 512 and 2048
+  max tokens) — a documented small-model quality limit, not a pipeline bug.
+  Operationally: **extraction serving wants thinking OFF; grounded-QA serving
+  wants thinking ON + the reasoning parser and `AI_INFERENCE_MAX_TOKENS≥2048`**
+  — the compose overlay exposes this as a single switch.
 
 ## Runbook (GPU server)
 

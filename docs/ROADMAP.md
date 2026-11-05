@@ -138,8 +138,13 @@ real-filing claim. See `docs/EVALUATION.md`.
       corpus PDFs from the frozen benchmark → gateway ingestion → hybrid
       retrieval → extraction → oracle scoring with gold rewriting and
       retrieval-hit accounting. Unit-tested with faked gateway/model.
-- [ ] End-to-end RAG real-eval **executed** on the GPU server (runbook in
-      docs/EVALUATION.md); numbers NOT RUN yet.
+- [x] End-to-end RAG real-eval **executed** on the GPU server (2026-11-05):
+      retrieval_hit_rate 1.0 both models; base value_exact 0.9784 (5 wrong
+      answers), adapter-v2 0.9048 (0 wrong answers; 20/22 false abstentions on
+      real restatements) — neither dominates; see docs/EVALUATION.md. vLLM
+      serving path validated live incl. a real citation-verified conversational
+      RAG answer; thinking-mode operating points measured and codified in the
+      overlay.
 
 ## Phase 4D — adapter-v2: targeted fixes ✅ (done)
 
