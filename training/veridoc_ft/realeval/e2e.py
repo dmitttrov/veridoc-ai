@@ -137,6 +137,12 @@ def build_pdf(pages: list[str]) -> bytes:
     for text in pages:
         y = height - 72
         for line in text.split("\n"):
+            if y < 72:
+                # Overflow onto a fresh physical page rather than drawing at
+                # negative y — off-page text survives only by a pypdf quirk
+                # and is invisible to humans or geometry-aware extractors.
+                c.showPage()
+                y = height - 72
             c.drawString(72, y, line[:200])
             y -= 14
         c.showPage()
@@ -156,6 +162,9 @@ class GatewayClient:
     def __init__(self, base_url: str, timeout_s: float = 120.0) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
+        # Identity of the retrieval configuration actually used, captured from
+        # the last /api/retrieve response so reports are self-documenting.
+        self.last_response_meta: dict = {}
 
     def _request(self, req: urllib.request.Request) -> dict:
         try:
@@ -165,6 +174,12 @@ class GatewayClient:
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")[:500]
             raise RuntimeError(f"gateway {exc.code} for {req.full_url}: {body}") from exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            raise RuntimeError(
+                f"gateway unreachable/timed out for {req.full_url} "
+                f"(client timeout {self.timeout_s}s; for large ingests also raise "
+                f"the gateway's AI_INGEST_TIMEOUT_MS): {exc}"
+            ) from exc
 
     def upload_pdf(self, filename: str, data: bytes) -> str:
         """Upload one PDF; returns the stored documentId (idempotent re-upload ok)."""
@@ -185,11 +200,20 @@ class GatewayClient:
             raise RuntimeError(f"ingestion failed for {filename}: {result}")
         return str(result["documentId"])
 
-    def retrieve(self, query: str, top_k: int, rerank: bool | None) -> list[dict]:
-        """Hybrid retrieval over everything ingested; returns passage dicts."""
+    def retrieve(
+        self,
+        query: str,
+        top_k: int,
+        rerank: bool | None,
+        document_ids: list[str] | None = None,
+    ) -> list[dict]:
+        """Hybrid retrieval; scope with `document_ids` so an eval can never be
+        contaminated by other corpora sitting in the same (add-only) store."""
         payload: dict[str, Any] = {"query": query, "topK": top_k}
         if rerank is not None:
             payload["rerank"] = rerank
+        if document_ids:
+            payload["documentIds"] = document_ids
         req = urllib.request.Request(
             f"{self.base_url}/api/retrieve",
             data=json.dumps(payload).encode("utf-8"),
@@ -197,6 +221,12 @@ class GatewayClient:
             method="POST",
         )
         result = self._request(req)
+        self.last_response_meta = {
+            "embedding_model": result.get("embeddingModel"),
+            "embedding_dim": result.get("embeddingDim"),
+            "reranked": result.get("reranked"),
+            "reranker_model": result.get("rerankerModel"),
+        }
         passages = result.get("passages", [])
         return list(passages)
 
@@ -250,10 +280,16 @@ def run_e2e(
     scores: list[dict] = []
     details: list[dict] = []
     rewritten_count = 0
+    corpus_doc_ids = list(document_ids.values())
     for ex in examples:
         target, rewritten = resolve_e2e_target(ex, facts)
         rewritten_count += int(rewritten)
-        retrieved = client.retrieve(ex.question, top_k=top_k, rerank=rerank)
+        # Scoped to this eval's own documents — the store is add-only, so an
+        # unscoped query could pull passages from unrelated corpora (e.g. the
+        # authentic 10-K texts) ingested on the same stack.
+        retrieved = client.retrieve(
+            ex.question, top_k=top_k, rerank=rerank, document_ids=corpus_doc_ids
+        )
         texts = [str(p.get("text", "")) for p in retrieved]
 
         pred = extract_fn(ex.question, texts)

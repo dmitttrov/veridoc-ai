@@ -6,7 +6,9 @@ the HF model directly for evaluation.
 """
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -17,7 +19,28 @@ from veridoc_ft.schema import ExtractionResult, parse_extraction
 from veridoc_ft.train import load_base
 
 
+def _check_adapter_base(adapter_path: str, model_id: str) -> None:
+    """Fail fast if the LoRA adapter was trained on a different base.
+
+    peft loads with strict=False and never cross-checks the adapter config:
+    a shape-compatible wrong base loads SILENTLY (identity-initialized LoRA),
+    publishing 'adapter' numbers measured on effectively no adapter at all; a
+    shape-incompatible one fails late with a cryptic tensor-size error.
+    """
+    cfg_path = Path(adapter_path) / "adapter_config.json"
+    if not cfg_path.exists():
+        return  # unusual layouts (e.g. checkpoints) fall through to peft
+    base = json.loads(cfg_path.read_text(encoding="utf-8")).get("base_model_name_or_path")
+    if base and base != model_id:
+        raise ValueError(
+            f"adapter at {adapter_path} was trained on base '{base}' but the "
+            f"configured model is '{model_id}' — refusing to combine them"
+        )
+
+
 def load_model(config: TrainConfig, adapter_path: str | None = None) -> tuple[Any, Any]:
+    if adapter_path:
+        _check_adapter_base(adapter_path, config.model_id)
     model, tokenizer = load_base(config)
     label = "base"
     if adapter_path:

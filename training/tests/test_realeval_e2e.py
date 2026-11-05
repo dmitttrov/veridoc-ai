@@ -153,7 +153,10 @@ class FakeGateway(GatewayClient):
         self.uploads.append(filename)
         return f"doc-{len(self.uploads)}"
 
-    def retrieve(self, query: str, top_k: int, rerank: bool | None) -> list[dict]:
+    def retrieve(self, query: str, top_k: int, rerank: bool | None,
+                 document_ids: list[str] | None = None) -> list[dict]:
+        self.scopes = getattr(self, "scopes", [])
+        self.scopes.append(document_ids)
         return [
             {"text": t, "citation": f"fake, p.{i + 1}"}
             for i, t in enumerate(self.retrieved_texts[:top_k])
@@ -176,10 +179,11 @@ def _good_extractor(question: str, evidence: list[str]) -> dict:
 
 def test_run_e2e_scores_retrieval_hit_and_extraction(tmp_path: Path) -> None:
     out = tmp_path / "report.json"
+    gw = FakeGateway([NI_FY23, REV_FY23])
     report = run_e2e(
         TrainConfig(),
         data_path=_write_data(tmp_path, [_answerable()]),
-        client=FakeGateway([NI_FY23, REV_FY23]),
+        client=gw,
         extract_fn=_good_extractor,
         out_path=str(out),
     )
@@ -191,6 +195,9 @@ def test_run_e2e_scores_retrieval_hit_and_extraction(tmp_path: Path) -> None:
     assert m["citation_support"] == 1.0
     assert report["mode"] == "e2e"
     assert report["corpus"]["documents"] == 1
+    # Retrieval must be scoped to this eval's own uploaded documents — the
+    # store is add-only and may hold other corpora.
+    assert gw.scopes == [["doc-1"]]
     assert json.loads(out.read_text(encoding="utf-8"))["metrics"]["value_exact"] == 1.0
 
 
