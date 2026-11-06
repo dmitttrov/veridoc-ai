@@ -31,7 +31,7 @@ dev = [
 # Real local embedding model. Heavy (torch); install only when you want to run
 # the sentence-transformers provider: pip install -e ".[dev,embeddings]"
 embeddings = [
-    "sentence-transformers>=3.0,<4",
+    "sentence-transformers>=3.0,<7",
 ]
 
 [build-system]
