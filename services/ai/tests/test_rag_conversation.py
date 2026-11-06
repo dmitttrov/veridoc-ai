@@ -148,7 +148,7 @@ class _RecordingProvider:
 
 
 def _fake_retrieve(captured: dict):
-    async def fake(pool, embedder, request, reranker, *, rerank_candidate_k):
+    async def fake(pool, embedder, request, reranker, *, rerank_candidate_k, expand_queries=False):
         captured["query"] = request.query
         return RetrievalResponse(
             query=request.query,

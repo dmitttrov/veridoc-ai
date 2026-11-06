@@ -343,6 +343,23 @@ def test_rerank_on_without_a_reranker_fails_loudly() -> None:
         assert "rerank" in str(exc)
 
 
+def test_retrieval_only_mode_measures_without_a_model() -> None:
+    # No extract_fn, no adapter, retrieval_only=True: must never touch torch.
+    spec = FilingSpec(company="Apple Inc.", cik="0000320193",
+                      accession="0001-25-000073", items=(ITEM,))
+    report = run_authentic(
+        TrainConfig(), data_path="unused", retrieval_only=True,
+        client=FakeGateway([TABLE_ROW]),
+        specs=[spec], filing_text={"Apple Inc.": TABLE_ROW},
+    )
+    m = report["metrics"]
+    assert report["mode"] == "authentic-retrieval-only"
+    assert m["retrieval_hit_digits_rate"] == 1.0
+    assert m["value_exact"] is None  # extraction keys absent, reported null
+    assert m["parse_failure_rate"] is None
+    assert report["model_id"] is None
+
+
 def test_citation_support_digits_is_aggregated() -> None:
     spec = FilingSpec(company="Apple Inc.", cik="0000320193",
                       accession="0001-25-000073", items=(ITEM,))

@@ -129,6 +129,7 @@ async def answer_question(
         ),
         reranker,
         rerank_candidate_k=settings.rerank_candidate_k,
+        expand_queries=settings.query_expansion,
     )
     passages = retrieval.passages
 

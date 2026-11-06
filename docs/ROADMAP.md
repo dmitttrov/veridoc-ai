@@ -186,6 +186,18 @@ the mock (ADR-0026).
 
 ---
 
+## Retrieval: metric-synonym query expansion ✅ (built + measured 2026-11-06)
+
+ADR-0028: deterministic curated synonyms, RRF-fused variants, config-gated
+(`AI_QUERY_EXPANSION`, default on), `expandedQueries` on the wire. Measured on
+the authentic corpus with `--retrieval-only`: 0.4231 → 0.4359 top-5 hit
+(+2 vocabulary wins, −1 RRF dilution). Diagnosis: all 78 gold values are in
+the corpus; the dominant failure is **prose bias against terse statement
+rows** in every ranking stage — next lever is table-aware evidence
+(contextual chunk headers / structured table indexing), not more synonyms.
+
+---
+
 ## Phase 5 (planned) — Run the real eval → decision → (approved) publication
 
 Run the Phase 4C commands on the GPU server to get measured base-vs-adapter

@@ -178,6 +178,9 @@ class RetrievalResponse(CamelModel):
     embedding_dim: int = Field(gt=0)
     reranked: bool = False
     reranker_model: str | None = None
+    # Query variants fused by metric-synonym expansion; null when expansion
+    # was off or the query contained no recognized metric phrase.
+    expanded_queries: list[str] | None = None
 
 
 # --- Phase 3: grounded RAG -------------------------------------------------

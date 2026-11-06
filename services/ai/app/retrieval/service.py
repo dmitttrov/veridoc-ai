@@ -28,6 +28,7 @@ from app.models import (
     RetrievedPassage,
 )
 from app.reranking.base import Reranker
+from app.retrieval.expansion import expand_query
 
 # RRF constant. 60 is the value from the original Cormack et al. paper and is a
 # robust default; larger values flatten the contribution of top ranks.
@@ -114,6 +115,7 @@ async def retrieve(
     reranker: Reranker | None = None,
     *,
     rerank_candidate_k: int = 20,
+    expand_queries: bool = False,
 ) -> RetrievalResponse:
     # Decide whether reranking applies: a reranker must exist AND the request
     # must not have explicitly disabled it.
@@ -123,34 +125,47 @@ async def retrieve(
     candidate_pool = max(first_stage_k, request.top_k * 4, 20)
 
     doc_filter = _to_uuid_list(request.document_ids)
-    query_vec = (await asyncio.to_thread(embedder.embed, [request.query]))[0]
-    has_semantic = any(v != 0.0 for v in query_vec)
+    # Metric-synonym expansion (deterministic, ADR-0028): each variant runs
+    # both legs and contributes its own rankings to RRF. The original query's
+    # rankings are always included, so expansion only ADDS evidence paths.
+    variants = expand_query(request.query) if expand_queries else [request.query]
+    variant_vecs = await asyncio.to_thread(embedder.embed, variants)
 
+    lexical_lists: list[list[asyncpg.Record]] = []
+    semantic_lists: list[list[asyncpg.Record]] = []
     async with pool.acquire() as conn:
-        lexical_rows = await conn.fetch(
-            _LEXICAL_SQL, request.query, embedder.model_id, doc_filter, candidate_pool
-        )
-        semantic_rows = (
-            await conn.fetch(
-                _SEMANTIC_SQL, query_vec, embedder.model_id, doc_filter, candidate_pool
+        for variant, vec in zip(variants, variant_vecs, strict=True):
+            lexical_lists.append(
+                list(
+                    await conn.fetch(
+                        _LEXICAL_SQL, variant, embedder.model_id, doc_filter, candidate_pool
+                    )
+                )
             )
-            if has_semantic
-            else []
-        )
+            semantic_lists.append(
+                list(
+                    await conn.fetch(
+                        _SEMANTIC_SQL, vec, embedder.model_id, doc_filter, candidate_pool
+                    )
+                )
+                if any(v != 0.0 for v in vec)
+                else []
+            )
 
+    # Per-leg scores keep their meaning ("0 when not matched"): a candidate's
+    # leg score is its best score for that leg across variants.
     candidates: dict[uuid.UUID, _Candidate] = {}
-    for row in lexical_rows:
-        cand = candidates.setdefault(row["id"], _candidate_from_row(row))
-        cand.lexical = float(row["score"])
-    for row in semantic_rows:
-        cand = candidates.setdefault(row["id"], _candidate_from_row(row))
-        cand.semantic = float(row["score"])
+    for rows in lexical_lists:
+        for row in rows:
+            cand = candidates.setdefault(row["id"], _candidate_from_row(row))
+            cand.lexical = max(cand.lexical, float(row["score"]))
+    for rows in semantic_lists:
+        for row in rows:
+            cand = candidates.setdefault(row["id"], _candidate_from_row(row))
+            cand.semantic = max(cand.semantic, float(row["score"]))
 
     fused = reciprocal_rank_fusion(
-        [
-            [str(r["id"]) for r in lexical_rows],
-            [str(r["id"]) for r in semantic_rows],
-        ]
+        [[str(r["id"]) for r in rows] for rows in (*lexical_lists, *semantic_lists)]
     )
     for cand in candidates.values():
         cand.fused = fused.get(str(cand.chunk_id), 0.0)
@@ -205,4 +220,7 @@ async def retrieve(
         embedding_dim=embedder.dim,
         reranked=reranked,
         reranker_model=reranker_model,
+        # Self-documenting reports: the exact variants that were fused, or
+        # null when expansion was off / found no metric phrase.
+        expanded_queries=variants if len(variants) > 1 else None,
     )

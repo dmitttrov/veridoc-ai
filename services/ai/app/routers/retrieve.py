@@ -28,4 +28,5 @@ async def retrieve(request: Request, body: RetrievalRequest) -> RetrievalRespons
         body,
         request.app.state.reranker,
         rerank_candidate_k=settings.rerank_candidate_k,
+        expand_queries=settings.query_expansion,
     )

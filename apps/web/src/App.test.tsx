@@ -47,6 +47,7 @@ const fixtures = vi.hoisted(() => {
     embeddingDim: 384,
     reranked: false,
     rerankerModel: null,
+    expandedQueries: null,
     passages: [
       {
         chunkId: '22222222-2222-2222-2222-222222222222',
