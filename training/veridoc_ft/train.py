@@ -6,6 +6,7 @@ initialized Qwen3 model. `run` wires the real pinned base model + dataset.
 """
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 from dataclasses import asdict
@@ -123,6 +124,14 @@ def train(
         if hasattr(model, "config"):
             model.config.use_cache = False
 
+    # transformers v5 merged warmup_ratio into warmup_steps (a float in [0, 1)
+    # is read as a ratio); v4 still wants the dedicated kwarg. Detect by
+    # signature so the same code trains identically on both lines.
+    if "warmup_ratio" in inspect.signature(TrainingArguments.__init__).parameters:
+        warmup_kwargs: dict = {"warmup_ratio": config.warmup_ratio}
+    else:
+        warmup_kwargs = {"warmup_steps": config.warmup_ratio}
+
     args = TrainingArguments(
         output_dir=str(out),
         seed=config.seed,
@@ -133,7 +142,7 @@ def train(
         learning_rate=config.learning_rate,
         num_train_epochs=config.num_train_epochs,
         max_steps=config.max_steps,
-        warmup_ratio=config.warmup_ratio,
+        **warmup_kwargs,
         weight_decay=config.weight_decay,
         logging_steps=config.logging_steps,
         eval_strategy="steps" if eval_rows else "no",
