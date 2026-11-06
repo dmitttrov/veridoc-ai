@@ -473,6 +473,44 @@ cap (gold rows may be absent — counted against retrieval honestly).
 n=78 over 6 mega-caps; digit-exact matching requires whole-million gold
 values; no paired-bootstrap on this round (the adapter's 0/78 needs none).
 
+## Retrieval follow-up: metric-synonym query expansion — measured 2026-11-06
+
+ADR-0028 added deterministic metric-synonym expansion ("total revenue" →
+"total net sales" …, ≤4 variants, all legs fused by RRF), measured with
+`--retrieval-only` on the same corpus/stack (identical baseline reproduced:
+0.4231 — a useful determinism check across machines).
+
+| retrieval_hit_digits @5 (n=78) | expansion OFF | expansion ON |
+| --- | --- | --- |
+| rate | 0.4231 | **0.4359** |
+
+Per-question: **+2 vocabulary wins** (Apple and JPMorgan FY2024 revenue, found
+via the "net sales"/"total net revenue"-style variants), **−1 RRF dilution**
+(a previously-hit J&J cash row demoted out of the top-5 by the added variant
+rankings). Net **+1.3 pts** — real but small, and the diagnosis of the
+remaining misses is the valuable part:
+
+- **Every one of the 78 gold values IS in the ingested corpus** (digit-scan
+  over the exact paginated text, including JPMorgan's truncated document).
+  The 56% miss rate is pure ranking failure — 44 questions are retrievable
+  but not retrieved at top-5.
+- Misses span metrics with **no vocabulary gap at all** ("total assets" and
+  "total liabilities" — printed verbatim in every balance sheet — account
+  for 17 of 44), so vocabulary was never the dominant failure mode.
+- **Company ambiguity is ruled out**: scoping a missed Apple question to
+  Apple's document alone returns the IDENTICAL top-5 (already all-Apple) and
+  still misses the "Total assets | 359,241" row.
+- The dominant failure is **prose bias in every ranking stage**: FTS term
+  density, MiniLM similarity, and the ms-marco cross-encoder all prefer
+  prose that *talks about* a metric over the terse, number-dense statement
+  row that *states* it.
+
+**Conclusion:** expansion ships (strict improvement, deterministic, config-
+gated) but the measured next bottleneck is table-row ranking. The highest-
+leverage follow-up is table-aware evidence: contextual chunk headers
+(statement/section titles prefixed to chunks at ingestion) and/or structured
+table indexing — not more synonyms, not a bigger reranker.
+
 # End-to-end RAG real eval (templated corpus) — EXECUTED 2026-11-02
 
 `veridoc_ft.realeval.e2e` closes the loop the oracle eval deliberately left
