@@ -461,6 +461,7 @@ def run_authentic(
     extract_fn: ExtractFn | None = None,
     specs: list[FilingSpec] | None = None,
     filing_text: dict[str, str] | None = None,
+    retrieval_only: bool = False,
 ) -> dict:
     """Fetch filings, ingest verbatim text, then retrieve + extract + score.
 
@@ -501,7 +502,8 @@ def run_authentic(
     if limit:
         items = items[:limit]
 
-    extract_fn = extract_fn or _default_extract_fn(config, adapter_path)
+    if not retrieval_only:
+        extract_fn = extract_fn or _default_extract_fn(config, adapter_path)
 
     retrieval_meta: dict = {}
     scores: list[dict] = []
@@ -522,15 +524,34 @@ def run_authentic(
                     "reranking (no reranker configured?) — refusing to "
                     "publish a report whose header misstates the config"
                 )
-        pred = extract_fn(item.question, texts)
-        s = score_authentic(item, texts, pred)
+        if retrieval_only:
+            # Measure the retrieval leg alone (no model, no GPU): used to
+            # quantify retrieval changes like query expansion in isolation.
+            gold = item.gold
+            s = {
+                "id": f"{item.company}|{item.metric}|{item.period}",
+                "company": item.company, "metric": item.metric,
+                "period": item.period, "category": "authentic",
+                "latency_s": 0.0,
+                "retrieval_hit": any(passage_contains_gold(t, gold) for t in texts),
+            }
+            if digits_scoreable(gold):
+                s["retrieval_hit_digits"] = any(
+                    passage_has_gold_digits(t, gold) for t in texts
+                )
+            raw = ""
+        else:
+            assert extract_fn is not None
+            pred = extract_fn(item.question, texts)
+            s = score_authentic(item, texts, pred)
+            raw = str(pred.get("raw", ""))[:400]
         scores.append(s)
         details.append({
             **s,
             "question": item.question,
             "gold_value": item.value,
             "retrieved": [str(p.get("citation", "")) for p in retrieved],
-            "raw": str(pred.get("raw", ""))[:400],
+            "raw": raw,
         })
 
     metrics = aggregate(scores)
@@ -541,26 +562,38 @@ def run_authentic(
     for key in extra_keys:
         vals = [bool(x[key]) for x in scores if key in x]
         metrics[f"{key}_rate"] = round(sum(vals) / len(vals), 4) if vals else None
-    metrics["n_digits_excluded"] = sum(1 for s in scores if "value_digits_exact" not in s)
     hit = [s for s in scores if s.get("retrieval_hit_digits")]
-    metrics["value_digits_given_hit"] = (
-        round(sum(bool(s["value_digits_exact"]) for s in hit) / len(hit), 4) if hit else None
-    )
-    # Abstention on an answerable item is a coverage failure ONLY when the
-    # model actually produced a schema-valid abstention; unparseable output is
-    # a parse failure and must not masquerade as deliberate abstention.
-    metrics["false_abstention_rate"] = (
-        round(
-            sum(bool(s["schema_valid"]) and not s["pred_supported"] for s in scores)
-            / len(scores),
-            4,
+    if retrieval_only:
+        metrics["n_digits_excluded"] = sum(
+            1 for s in scores if "retrieval_hit_digits" not in s
         )
-        if scores
-        else None
-    )
-    metrics["parse_failure_rate"] = (
-        round(sum(not s["schema_valid"] for s in scores) / len(scores), 4) if scores else None
-    )
+        metrics["value_digits_given_hit"] = None
+        metrics["false_abstention_rate"] = None
+        metrics["parse_failure_rate"] = None
+    else:
+        metrics["n_digits_excluded"] = sum(1 for s in scores if "value_digits_exact" not in s)
+        metrics["value_digits_given_hit"] = (
+            round(sum(bool(s.get("value_digits_exact")) for s in hit) / len(hit), 4)
+            if hit
+            else None
+        )
+        # Abstention on an answerable item is a coverage failure ONLY when the
+        # model actually produced a schema-valid abstention; unparseable output
+        # is a parse failure and must not masquerade as deliberate abstention.
+        metrics["false_abstention_rate"] = (
+            round(
+                sum(bool(s["schema_valid"]) and not s["pred_supported"] for s in scores)
+                / len(scores),
+                4,
+            )
+            if scores
+            else None
+        )
+        metrics["parse_failure_rate"] = (
+            round(sum(not s["schema_valid"] for s in scores) / len(scores), 4)
+            if scores
+            else None
+        )
 
     per_company = {
         spec.company: aggregate([s for s in scores if s["company"] == spec.company])
@@ -568,9 +601,9 @@ def run_authentic(
     }
 
     report = {
-        "mode": "authentic-filing-text",
-        "model_id": config.model_id,
-        "model_revision": config.model_revision,
+        "mode": "authentic-retrieval-only" if retrieval_only else "authentic-filing-text",
+        "model_id": None if retrieval_only else config.model_id,
+        "model_revision": None if retrieval_only else config.model_revision,
         "adapter": adapter_path,
         "gateway": gateway_url,
         "top_k": top_k,
@@ -601,6 +634,11 @@ if __name__ == "__main__":
     ap.add_argument("--rerank", choices=["auto", "on", "off"], default="on")
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--cache-dir", default="data/authentic")
+    ap.add_argument(
+        "--retrieval-only",
+        action="store_true",
+        help="measure retrieval hits only (no model, no GPU)",
+    )
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
@@ -623,5 +661,6 @@ if __name__ == "__main__":
         limit=args.limit,
         out_path=args.out,
         cache_dir=args.cache_dir,
+        retrieval_only=args.retrieval_only,
     )
     print(json.dumps(rep["metrics"], indent=2))

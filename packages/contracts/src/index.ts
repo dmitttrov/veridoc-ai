@@ -297,5 +297,10 @@ export const RetrievalResponseSchema = z.object({
   reranked: z.boolean(),
   /** Identity of the reranker model, when reranking was applied. */
   rerankerModel: z.string().nullable(),
+  /**
+   * Query variants fused by deterministic metric-synonym expansion
+   * (ADR-0028); null when expansion was off or no metric phrase matched.
+   */
+  expandedQueries: z.array(z.string()).nullable(),
 });
 export type RetrievalResponse = z.infer<typeof RetrievalResponseSchema>;

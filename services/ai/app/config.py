@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     # Model id for the real provider (Apache-2.0 licensed, small, local).
     sentence_transformers_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 
+    # --- Retrieval: metric-synonym query expansion (ADR-0028) --------------
+    # Deterministic, curated synonym variants ("total revenue" -> "net sales")
+    # fused with RRF. Measured as the binding constraint on authentic filing
+    # text; on by default, disable to reproduce pre-expansion baselines.
+    query_expansion: bool = True
+
     # --- Phase 3: reranking ------------------------------------------------
     # "none" (default), "deterministic" (reproducible, no deps), or
     # "cross-encoder" (real local model via the optional [embeddings] extra).

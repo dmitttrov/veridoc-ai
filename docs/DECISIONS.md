@@ -462,6 +462,41 @@ GPU for extraction; harness mechanics are unit-tested with faked gateway/model.
 Default compose embeddings are the deterministic hashing provider — published
 e2e figures must state the embedding configuration used. **Status: Accepted.**
 
+## ADR-0028 — Deterministic metric-synonym query expansion in hybrid retrieval
+
+**Context.** The measured authentic filing-text eval (2026-11-05) showed
+retrieval vocabulary to be the binding constraint: questions say "total
+revenue", filings print "Total net sales", and only 42% of questions surfaced
+a gold-bearing passage in the top-5 — with semantic embeddings and a
+cross-encoder already active. LLM-based query rewriting would fix vocabulary
+at the cost of determinism, latency, and a failure mode (same reasoning as
+ADR-0026's condensation decision).
+
+**Decision.**
+- A curated, high-precision financial-metric synonym lexicon
+  (`app/retrieval/expansion.py`): question-style phrasing mapped to the
+  phrasings real 10-K statements use. When in doubt a synonym is left out —
+  a wrong synonym silently poisons retrieval.
+- `expand_query` substitutes only the single longest recognized phrase,
+  capped at 4 variants, original always first. Each variant runs BOTH legs
+  (its own tsquery + its own embedding) and all rankings fuse through the
+  existing RRF — expansion can only add candidate rankings, never remove the
+  original query's.
+- Per-leg scores keep their meaning: a chunk's lexical/semantic score is its
+  best across variants; "0 when not matched" is preserved.
+- Config-gated (`AI_QUERY_EXPANSION`, default **on**); the wire response
+  carries `expandedQueries` (the exact fused variants, or null) so every
+  eval report is self-documenting about whether expansion ran.
+- `python -m veridoc_ft.realeval.authentic --retrieval-only` measures the
+  retrieval leg in isolation (no model, no GPU) to quantify changes like
+  this one.
+
+**Consequences.** Up to 4× leg queries per retrieval (8 bounded SQL queries +
+one batched embedding call) — negligible at this scale. The lexicon is
+maintenance: metrics outside it get no expansion (reported honestly via
+`expandedQueries: null`). Measured impact on the authentic corpus is recorded
+in docs/EVALUATION.md. **Status: Accepted.**
+
 ## ADR-0009 — Fine-tune via LoRA/QLoRA on an open-weight base *(planned)*
 
 **Context.** We want a domain-adapted model without the cost or honesty problems
